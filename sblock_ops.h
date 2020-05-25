@@ -5,8 +5,8 @@
 
 #include "sblock.h"
 
-sblock_bytes encode_sblock(sblock sb);
+sblock_bytes sblock_encode(sblock sb);
 
-sblock decode_sblock(sblock_bytes sb_bytes);
+sblock sblock_decode(sblock_bytes sb_bytes);
 
 #endif

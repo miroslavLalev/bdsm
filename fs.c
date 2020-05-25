@@ -1,5 +1,7 @@
 #include <fcntl.h>
 #include <unistd.h>
+#include <string.h>
+#include <stdio.h>
 
 #include "bdsmerr.h"
 #include "sblock.h"
@@ -9,7 +11,7 @@ fs_error bdsm_mkfs(char *fs_file) {
     int fd = open(fs_file, O_CREAT|O_TRUNC|O_RDWR, 0660);
     if (fd == -1) {
         // TODO: propagate errno
-        return MKFS_OPEN_ERR;
+        return OPEN_ERR;
     }
 
     sblock sb;
@@ -24,7 +26,7 @@ fs_error bdsm_mkfs(char *fs_file) {
     // TODO: block_size could be command line argument
     sb.block_size = 1024;
 
-    sblock_bytes enc = encode_sblock(sb);
+    sblock_bytes enc = sblock_encode(sb);
     ssize_t wr_bytes = write(fd, enc.data, 1024);
     if (wr_bytes == -1) {
         // TODO: propagate errno
@@ -44,6 +46,30 @@ fs_error bdsm_mkfs(char *fs_file) {
 }
 
 fs_error bdsm_fsck(char *fs_file) {
+    int fd = open(fs_file, O_RDWR);
+    if (fd == -1) {
+        // TODO: errno
+        return OPEN_ERR;
+    }
+
+    uint8_t enc_data[1024];
+    ssize_t r_bytes = read(fd, &enc_data, 1024);
+    if (r_bytes == -1) {
+        // TODO: errno
+        return READ_ERR;
+    }
+    if (r_bytes < 1024) {
+        return CORRUPT_FS_ERR;
+    }
+
+    sblock_bytes sbb;
+    memcpy(&sbb.data, &enc_data, r_bytes);
+    sblock sb = sblock_decode(sbb);
+
+    int c_ret = close(fd);
+    if (c_ret == -1) {
+        return CLOSE_ERR;
+    }
     return NO_ERR;
 }
 
