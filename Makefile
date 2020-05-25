@@ -2,7 +2,7 @@ ifndef CC
 	CC=gcc
 endif
 CFLAGS=-std=c99 -Wall -Wpedantic -Wextra # TODO: add -Werror
-SRCS=bdsm.c fs.c sblock_ops.c mblock_ops.c
+SRCS=bdsm.c fs.c sblock_ops.c mblock_ops.c layout_ops.c
 OBJS=$(subst .c,.o,$(SRCS))
 RM=rm -f
 

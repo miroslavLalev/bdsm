@@ -37,14 +37,31 @@ int mblock_take_first(mblock *m) {
 }
 
 void mblock_unset(mblock *m, int n) {
-    int byte = n / 8;
-    int bit = n % 8;
-    m->data[byte] &= ~(1 << (bit-1));
+    m->data[n/8] &= ~(1 << ((n % 8) - 1));
 }
 
-mblock_vec mblock_container(size_t size) {
+mblock_vec mblock_vec_create(size_t size) {
     mblock_vec mv;
-    mv.blocks = malloc(size * sizeof(mblock));
+    mv.blocks = (mblock*)malloc(size*sizeof(mblock));
     mv.size = size;
     return mv;
+}
+
+void mblock_vec_drop(mblock_vec* mv) {
+    free(mv->blocks);
+}
+
+int mblock_vec_take_first(mblock_vec mv) {
+    size_t i;
+    for (i=0; i<mv.size; i++) {
+        int taken = mblock_take_first(&mv.blocks[i]);
+        if (taken != -1) {
+            return taken * (i+1);
+        }
+    }
+    return -1;
+}
+
+void mblock_vec_unset(mblock_vec mv, int k) {
+    mblock_unset(&mv.blocks[k/mv.size], k%mv.size);
 }

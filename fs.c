@@ -4,8 +4,8 @@
 #include <stdio.h>
 
 #include "bdsmerr.h"
-#include "sblock.h"
-#include "sblock_ops.h"
+#include "layout.h"
+#include "layout_ops.h"
 
 fs_error bdsm_mkfs(char *fs_file) {
     int fd = open(fs_file, O_CREAT|O_TRUNC|O_RDWR, 0660);
@@ -15,24 +15,28 @@ fs_error bdsm_mkfs(char *fs_file) {
     }
 
     sblock sb;
-
-    // TODO: pick according to the size of the given file
+    // TODO: pick fields according to the size of the given file
     sb.n_inodes = UINT32_MAX;
-    sb.imap_blocks = UINT16_MAX;
-    sb.zmap_blocks = UINT16_MAX;
+    sb.imap_blocks = 10;
+    sb.zmap_blocks = 10;
     sb.first_data_zone = 0; // TODO
     sb.max_size = UINT64_MAX;
     sb.zones = UINT64_MAX;
     // TODO: block_size could be command line argument
     sb.block_size = 1024;
 
-    sblock_bytes enc = sblock_encode(sb);
-    ssize_t wr_bytes = write(fd, enc.data, 1024);
+    layout l = layout_create(sb);
+    size_t buf_size = layout_size(&l);
+    uint8_t *buf = (uint8_t*)malloc(buf_size);
+    layout_encode(&l, buf);
+    layout_drop(&l);
+
+    ssize_t wr_bytes = write(fd, buf, buf_size);
     if (wr_bytes == -1) {
         // TODO: propagate errno
         return WRITE_ERR;
     }
-    if (wr_bytes < 1024) {
+    if (wr_bytes < buf_size) {
         // no space or signal before completion
         return INCOMPLETE_WRITE_ERR;
     }
@@ -64,7 +68,7 @@ fs_error bdsm_fsck(char *fs_file) {
 
     sblock_bytes sbb;
     memcpy(&sbb.data, &enc_data, r_bytes);
-    sblock sb = sblock_decode(sbb);
+    // sblock sb = sblock_decode(sbb);
 
     int c_ret = close(fd);
     if (c_ret == -1) {
