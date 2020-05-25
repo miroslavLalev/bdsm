@@ -41,25 +41,32 @@ void layout_encode(layout *l, uint8_t *buf) {
     }
 }
 
-layout layout_decode(uint8_t *buf) {
-    sblock_bytes sbb;
-    memcpy(&sbb.data, buf, 1024);
-    sblock sb = sblock_decode(sbb);
-
-    mblock_vec inode_mb = mblock_vec_create(sb.imap_blocks);
-    mblock_vec zones_mb = mblock_vec_create(sb.zmap_blocks);
+void layout_extend(layout *l, uint8_t *mb_buf) {
+    mblock_vec inode_mb = mblock_vec_create(l->sb.imap_blocks);
+    mblock_vec zones_mb = mblock_vec_create(l->sb.zmap_blocks);
 
     size_t i;
     for (i=0; i<inode_mb.size; i++) {
-        memcpy(&inode_mb.blocks[i].data, buf, MBLOCK_SIZE);
+        memcpy(&inode_mb.blocks[i].data, mb_buf, MBLOCK_SIZE);
+        mb_buf += 1024;
     }
     for (i=0; i<zones_mb.size; i++) {
-        memcpy(&zones_mb.blocks[i].data, buf, MBLOCK_SIZE);
+        memcpy(&zones_mb.blocks[i].data, mb_buf, MBLOCK_SIZE);
+        mb_buf += 1024;
     }
-    layout l;
-    l.sb = sb;
-    l.inode_mb = inode_mb;
-    l.zones_mb = zones_mb;
-    return l;
+
+    l->inode_mb = inode_mb;
+    l->zones_mb = zones_mb;
 }
 
+layout layout_decode(uint8_t *buf) {
+    sblock_bytes sbb;
+    memcpy(&sbb.data, buf, 1024);
+    buf += 1024;
+    sblock sb = sblock_decode(sbb);
+
+    layout l;
+    l.sb = sb;
+    layout_extend(&l, buf);
+    return l;
+}

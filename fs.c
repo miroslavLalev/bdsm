@@ -6,6 +6,8 @@
 #include "bdsmerr.h"
 #include "layout.h"
 #include "layout_ops.h"
+#include "sblock.h"
+#include "sblock_ops.h"
 
 fs_error bdsm_mkfs(char *fs_file) {
     int fd = open(fs_file, O_CREAT|O_TRUNC|O_RDWR, 0660);
@@ -32,11 +34,12 @@ fs_error bdsm_mkfs(char *fs_file) {
     layout_drop(&l);
 
     ssize_t wr_bytes = write(fd, buf, buf_size);
+    free(buf);
     if (wr_bytes == -1) {
         // TODO: propagate errno
         return WRITE_ERR;
     }
-    if (wr_bytes < buf_size) {
+    if ((size_t)wr_bytes < buf_size) {
         // no space or signal before completion
         return INCOMPLETE_WRITE_ERR;
     }
@@ -68,7 +71,17 @@ fs_error bdsm_fsck(char *fs_file) {
 
     sblock_bytes sbb;
     memcpy(&sbb.data, &enc_data, r_bytes);
-    // sblock sb = sblock_decode(sbb);
+    layout l = layout_create(sblock_decode(sbb));
+    size_t mb_size = layout_size(&l) - 1024;
+    uint8_t *mb_buf = (uint8_t*)malloc(mb_size);
+    r_bytes = read(fd, mb_buf, mb_size);
+    if (r_bytes == -1) {
+        return READ_ERR;
+    }
+    if ((size_t)r_bytes < mb_size) {
+        return CORRUPT_FS_ERR;
+    }
+    layout_extend(&l, mb_buf);
 
     int c_ret = close(fd);
     if (c_ret == -1) {

@@ -17,4 +17,7 @@ void layout_encode(layout *l, uint8_t *buf);
 
 layout layout_decode(uint8_t *buf);
 
+// fill layout's map blocks
+void layout_extend(layout *l, uint8_t *mb_buf);
+
 #endif
