@@ -4,12 +4,13 @@
 #include <stdint.h>
 
 #define INODE_SIZE 64
+#define ZONES_SIZE 10
 
 struct inode_str {
     uint16_t mode;
     uint16_t nr_links;
     uint64_t size;
-    uint32_t zones[10]; // 7 direct, 1 indirect, 1 doubly-indirect, 1 triply-indirect
+    uint32_t zones[ZONES_SIZE]; // 7 direct, 1 indirect, 1 doubly-indirect, 1 triply-indirect
 
     // make up to 64 bytes in size;
     uint8_t pad[12];

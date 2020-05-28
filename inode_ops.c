@@ -11,7 +11,7 @@ inode_bytes inode_encode(inode n) {
     enc_u64(n.size, nb.data, &offset);
 
     size_t i;
-    for (i=0; i<10; i++) {
+    for (i=0; i<ZONES_SIZE; i++) {
         enc_u32(n.zones[i], nb.data, offset);
     }
     return nb;
@@ -25,7 +25,7 @@ inode inode_decode(inode_bytes nb) {
     n.size = dec_u64(nb.data, &offset);
 
     size_t i;
-    for (i=0; i<10; i++) {
+    for (i=0; i<ZONES_SIZE; i++) {
         n.zones[i] = dec_u32(nb.data, &offset);
     }
     return n;
