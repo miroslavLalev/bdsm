@@ -1,4 +1,5 @@
 #include <stdlib.h>
+#include <string.h>
 #include <assert.h>
 
 #include "inode_vec.h"
@@ -55,4 +56,4 @@ inode inode_vec_get(inode_vec v, size_t i) {
 
 void inode_vec_drop(inode_vec *v) {
     free(v->nodes);
-};
+}

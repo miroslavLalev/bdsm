@@ -12,7 +12,7 @@ inode_bytes inode_encode(inode n) {
 
     size_t i;
     for (i=0; i<ZONES_SIZE; i++) {
-        enc_u32(n.zones[i], nb.data, offset);
+        enc_u32(n.zones[i], nb.data, &offset);
     }
     return nb;
 }
