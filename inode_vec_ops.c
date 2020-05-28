@@ -21,8 +21,8 @@ void inode_vec_push(inode_vec *v, inode n) {
         v->nodes = new_nodes;
         v->capacity*=2;
     }
-    v->nodes[v->size+1] = n;
     v->size++;
+    v->nodes[v->size] = n;
 }
 
 inode inode_vec_remove(inode_vec *v, size_t i) {

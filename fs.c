@@ -82,6 +82,7 @@ fs_error bdsm_fsck(char *fs_file) {
         return CORRUPT_FS_ERR;
     }
     layout_extend(&l, mb_buf);
+    layout_drop(&l);
 
     int c_ret = close(fd);
     if (c_ret == -1) {

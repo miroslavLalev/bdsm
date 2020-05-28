@@ -17,7 +17,14 @@ layout layout_create(sblock sb) {
     l.sb = sb;
     l.inode_mb = mblock_vec_create(sb.imap_blocks);
     l.zones_mb = mblock_vec_create(sb.zmap_blocks);
-    l.nodes = inode_vec_init(sb.n_inodes * 2 + 100);
+    l.nodes = inode_vec_init(sb.n_inodes);
+
+    size_t i;
+    for (i=0; i<sb.n_inodes; i++) {
+        inode n; // create empty nodes
+        inode_vec_push(&l.nodes, n);
+    }
+
     return l;
 }
 
@@ -48,13 +55,14 @@ void layout_encode(layout *l, uint8_t *buf) {
     for (i=0; i<l->sb.n_inodes; i++) {
         inode_bytes nb = inode_encode(inode_vec_get(l->nodes, i));
         memcpy(buf, &nb.data, INODE_SIZE);
+        buf += INODE_SIZE;
     }
 }
 
 void layout_extend(layout *l, uint8_t *mb_buf) {
     mblock_vec inode_mb = mblock_vec_create(l->sb.imap_blocks);
     mblock_vec zones_mb = mblock_vec_create(l->sb.zmap_blocks);
-    inode_vec nodes = inode_vec_init(l->sb.n_inodes * 2 + 100);
+    inode_vec nodes = inode_vec_init(l->sb.n_inodes);
 
     size_t i;
     for (i=0; i<inode_mb.size; i++) {
@@ -72,9 +80,11 @@ void layout_extend(layout *l, uint8_t *mb_buf) {
 
         inode_vec_push(&nodes, inode_decode(nb));
     }
+    inode_vec_drop(&l->nodes);
 
     l->inode_mb = inode_mb;
     l->zones_mb = zones_mb;
+    l->nodes = nodes;
 }
 
 layout layout_decode(uint8_t *buf) {
