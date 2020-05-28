@@ -14,6 +14,8 @@ inode inode_vec_remove(inode_vec *v, size_t i);
 
 inode inode_vec_get(inode_vec v, size_t i);
 
+void inode_vec_set(inode_vec *v, inode n, size_t i);
+
 void inode_vec_drop(inode_vec *v);
 
 #endif

@@ -54,6 +54,11 @@ inode inode_vec_get(inode_vec v, size_t i) {
     return v.nodes[i];
 }
 
+void inode_vec_set(inode_vec *v, inode n, size_t i) {
+    assert(v->size >= i);
+    v->nodes[i] = n;
+}
+
 void inode_vec_drop(inode_vec *v) {
     free(v->nodes);
 }
