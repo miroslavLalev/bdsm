@@ -18,7 +18,7 @@ fs_error bdsm_mkfs(char *fs_file) {
 
     sblock sb;
     // TODO: pick fields according to the size of the given file
-    sb.n_inodes = UINT32_MAX;
+    sb.n_inodes = 10000;
     sb.imap_blocks = 10;
     sb.zmap_blocks = 10;
     sb.first_data_zone = 0; // TODO
