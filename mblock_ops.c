@@ -51,10 +51,10 @@ void mblock_vec_drop(mblock_vec* mv) {
     free(mv->blocks);
 }
 
-int mblock_vec_take_first(mblock_vec mv) {
+int mblock_vec_take_first(mblock_vec *mv) {
     size_t i;
-    for (i=0; i<mv.size; i++) {
-        int taken = mblock_take_first(&mv.blocks[i]);
+    for (i=0; i<mv->size; i++) {
+        int taken = mblock_take_first(&mv->blocks[i]);
         if (taken != -1) {
             return taken * (i+1);
         }
@@ -62,6 +62,6 @@ int mblock_vec_take_first(mblock_vec mv) {
     return -1;
 }
 
-void mblock_vec_unset(mblock_vec mv, int k) {
-    mblock_unset(&mv.blocks[k/mv.size], k%mv.size);
+void mblock_vec_unset(mblock_vec *mv, int k) {
+    mblock_unset(&mv->blocks[k/mv->size], k%mv->size);
 }

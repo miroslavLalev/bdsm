@@ -7,7 +7,9 @@
 #include "layout.h"
 #include "sblock.h"
 
-layout layout_create(sblock sb);
+layout layout_init(sblock sb);
+
+layout layout_recreate(sblock sb);
 
 void layout_drop(layout *l);
 

@@ -19,15 +19,14 @@ fs_error bdsm_mkfs(char *fs_file) {
     sblock sb;
     // TODO: pick fields according to the size of the given file
     sb.n_inodes = 10000;
-    sb.imap_blocks = 10;
-    sb.zmap_blocks = 10;
-    sb.first_data_zone = 0; // TODO
+    sb.imap_blocks = 10; // 81920 total inodes
+    sb.zmap_blocks = 10000; //  78 GB total size of data blocks
     sb.max_size = UINT64_MAX;
     sb.zones = UINT64_MAX;
     // TODO: block_size could be command line argument
     sb.block_size = 1024;
 
-    layout l = layout_create(sb);
+    layout l = layout_init(sb);
     size_t buf_size = layout_size(&l);
     uint8_t *buf = (uint8_t*)malloc(buf_size);
     layout_encode(&l, buf);
@@ -71,7 +70,7 @@ fs_error bdsm_fsck(char *fs_file) {
 
     sblock_bytes sbb;
     memcpy(&sbb.data, &enc_data, r_bytes);
-    layout l = layout_create(sblock_decode(sbb));
+    layout l = layout_recreate(sblock_decode(sbb));
     size_t mb_size = layout_size(&l) - 1024;
     uint8_t *mb_buf = (uint8_t*)malloc(mb_size);
     r_bytes = read(fd, mb_buf, mb_size);

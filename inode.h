@@ -6,6 +6,12 @@
 #define INODE_SIZE 64
 #define ZONES_SIZE 10
 
+// octal numbers for inode type
+const uint8_t M_DIR, M_FILE, M_SLNK;
+
+// octal numbers for permission bits
+const uint8_t M_EXEC, M_WRITE, M_READ;
+
 struct inode_str {
     uint16_t mode;
     uint16_t nr_links;

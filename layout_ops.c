@@ -1,6 +1,8 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
+#include <stdio.h>
+#include <assert.h>
 
 #include "layout.h"
 #include "mblock.h"
@@ -12,15 +14,35 @@
 #include "inode_vec.h"
 #include "inode_vec_ops.h"
 
-layout layout_create(sblock sb) {
+size_t layout_size(layout *l) {
+    return 1024 +
+        (size_t)l->sb.imap_blocks * MBLOCK_SIZE +
+        (size_t)l->sb.zmap_blocks * MBLOCK_SIZE +
+        (size_t)l->sb.n_inodes * INODE_SIZE;
+}
+
+layout layout_init(sblock sb) {
     layout l;
-    l.sb = sb;
     l.inode_mb = mblock_vec_create(sb.imap_blocks);
     l.zones_mb = mblock_vec_create(sb.zmap_blocks);
     l.nodes = inode_vec_init(sb.n_inodes);
 
+    // set this after sizing the layout
+    sb.first_data_zone = layout_size(&l);
+    l.sb = sb;
+
+    inode iroot;
+    iroot.nr_links = 1;
+    inode_set_mode(&iroot, M_READ|M_EXEC, M_READ|M_EXEC, M_READ|M_EXEC, M_DIR);
+    int inr = mblock_vec_take_first(&l.inode_mb);
+    assert(inr == 1); // root inode should be the first one
+    int znr = mblock_vec_take_first(&l.zones_mb);
+    assert(znr == 1); // root zone should be the first one
+    iroot.zones[0] = znr;
+    inode_vec_push(&l.nodes, iroot);
+
     size_t i;
-    for (i=0; i<sb.n_inodes; i++) {
+    for (i=0; i<sb.n_inodes-1; i++) {
         inode n; // create empty nodes
         inode_vec_push(&l.nodes, n);
     }
@@ -28,14 +50,19 @@ layout layout_create(sblock sb) {
     return l;
 }
 
+layout layout_recreate(sblock sb) {
+    layout l;
+    l.sb = sb;
+    l.inode_mb = mblock_vec_create(sb.imap_blocks);
+    l.zones_mb = mblock_vec_create(sb.zmap_blocks);
+    l.nodes = inode_vec_init(sb.n_inodes);
+    return l;
+}
+
 void layout_drop(layout *l) {
     mblock_vec_drop(&l->inode_mb);
     mblock_vec_drop(&l->zones_mb);
     inode_vec_drop(&l->nodes);
-}
-
-size_t layout_size(layout *l) {
-    return 1024 + (size_t)l->sb.imap_blocks * MBLOCK_SIZE + (size_t)l->sb.zmap_blocks * MBLOCK_SIZE + (size_t)l->sb.n_inodes * INODE_SIZE;
 }
 
 void layout_encode(layout *l, uint8_t *buf) {

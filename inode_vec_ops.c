@@ -37,10 +37,13 @@ inode inode_vec_remove(inode_vec *v, size_t i) {
     }
 
     if (i == 0) {
+        // [1, n)
         memcpy(new_nodes, v->nodes+1, v->size);
     } else if (i == v->size + 1) {
+        // [0, n-1)
         memcpy(new_nodes, v->nodes, v->size);
     } else {
+        // [0, k) + (k, n)
         memcpy(new_nodes, v->nodes, i);
         memcpy(new_nodes+i, v->nodes+i+1, v->size-i);
     }
