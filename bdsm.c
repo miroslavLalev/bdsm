@@ -3,6 +3,7 @@
 #include <string.h>
 
 #include "fs.h"
+#include "fs_types.h"
 
 #define BSSM_FS_ENV "BDSM_FS"
 
@@ -41,11 +42,16 @@ int main(int argc, char *argv[]) {
         return 0;
     }
     if (strcmp(command, "debug") == 0) {
-        fs_error err = bdsm_debug(fs_file);
+        fs_debug dbg;
+        fs_error err = bdsm_debug(fs_file, &dbg);
         if (err != NO_ERR) {
             fprintf(stderr, "debug error\n");
             return 1;
         }
+        printf("BDSM Debug information:\n");
+        printf("\tmax size: %lu\n", dbg.max_size);
+        printf("\tblock size: %u\n", dbg.block_size);
+        printf("\tmax inodes: %u\n", dbg.n_inodes);
         return 0;
     }
     if (strcmp(command, "lsobj") == 0) {

@@ -6,12 +6,18 @@
 #include "inode_vec.h"
 
 struct layout_str {
+    // the super block represents static information about
+    // the underlying file system
     sblock sb;
-    mblock_vec inode_mb;
-    mblock_vec zones_mb;
-    inode_vec nodes;
 
-    // TODO: inodes, zones
+    // inode map block vector
+    mblock_vec inode_mb;
+
+    // zones map block vector
+    mblock_vec zones_mb;
+
+    // all possible inodes, some of them are empty as per inode_mb data
+    inode_vec nodes;
 };
 
 typedef struct layout_str layout;

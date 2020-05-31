@@ -2,6 +2,7 @@
 #define FS_H
 
 #include "bdsmerr.h"
+#include "fs_types.h"
 
 // Initializes a new BDSM file system into fs_file.
 fs_error bdsm_mkfs(char *fs_file);
@@ -10,7 +11,7 @@ fs_error bdsm_mkfs(char *fs_file);
 fs_error bdsm_fsck(char *fs_file);
 
 // Information for the given BDSM file system.
-fs_error bdsm_debug(char *fs_file);
+fs_error bdsm_debug(char *fs_file, fs_debug *res);
 
 // Information for the given BDSM object.
 fs_error bdsm_lsobj(char *fs_file, char *obj_path);

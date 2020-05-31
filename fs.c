@@ -8,6 +8,7 @@
 #include "layout_ops.h"
 #include "sblock.h"
 #include "sblock_ops.h"
+#include "fs_types.h"
 
 fs_error bdsm_mkfs(char *fs_file) {
     int fd = open(fs_file, O_CREAT|O_TRUNC|O_RDWR, 0660);
@@ -23,7 +24,7 @@ fs_error bdsm_mkfs(char *fs_file) {
     sb.zmap_blocks = 10000; //  78 GB total size of data blocks
     sb.max_size = UINT64_MAX;
     sb.zones = UINT64_MAX;
-    // TODO: block_size could be command line argument
+    // TODO: block_size could be _asserted_ command line argument
     sb.block_size = 1024;
 
     layout l = layout_init(sb);
@@ -90,7 +91,47 @@ fs_error bdsm_fsck(char *fs_file) {
     return NO_ERR;
 }
 
-fs_error bdsm_debug(char *fs_file) {
+fs_error bdsm_debug(char *fs_file, fs_debug *res) {
+    int fd = open(fs_file, O_RDWR);
+    if (fd == -1) {
+        // TODO: errno
+        return OPEN_ERR;
+    }
+
+    uint8_t enc_data[1024];
+    ssize_t r_bytes = read(fd, &enc_data, 1024);
+    if (r_bytes == -1) {
+        // TODO: errno
+        return READ_ERR;
+    }
+    if (r_bytes < 1024) {
+        return CORRUPT_FS_ERR;
+    }
+
+    sblock_bytes sbb;
+    memcpy(&sbb.data, &enc_data, r_bytes);
+    layout l = layout_recreate(sblock_decode(sbb));
+    size_t mb_size = layout_size(&l) - 1024;
+    uint8_t *mb_buf = (uint8_t*)malloc(mb_size);
+    r_bytes = read(fd, mb_buf, mb_size);
+    if (r_bytes == -1) {
+        return READ_ERR;
+    }
+    if ((size_t)r_bytes < mb_size) {
+        return CORRUPT_FS_ERR;
+    }
+    layout_extend(&l, mb_buf);
+    res->block_size = l.sb.block_size;
+    res->max_size = l.sb.max_size;
+    res->n_inodes = l.sb.n_inodes;
+    // TODO: add more data
+
+    layout_drop(&l);
+
+    int c_ret = close(fd);
+    if (c_ret == -1) {
+        return CLOSE_ERR;
+    }
     return NO_ERR;
 }
 
