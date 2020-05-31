@@ -9,6 +9,7 @@ enum fs_errors {
     INCOMPLETE_WRITE_ERR,
     CLOSE_ERR,
     CORRUPT_FS_ERR,
+    INVALID_PATH_ERR,
 };
 
 typedef enum fs_errors fs_error;

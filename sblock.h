@@ -11,7 +11,7 @@ struct sblock_str {
     uint32_t n_inodes;
     uint16_t imap_blocks;
     uint16_t zmap_blocks;
-    uint16_t first_data_zone;
+    uint64_t first_data_zone;
     uint64_t max_size;
     uint64_t zones;
     uint16_t block_size;

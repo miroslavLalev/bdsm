@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
+#include <stdio.h>
 
 #include "inode_vec.h"
 #include "inode.h"
@@ -21,8 +22,8 @@ void inode_vec_push(inode_vec *v, inode n) {
         v->nodes = new_nodes;
         v->capacity*=2;
     }
-    v->size++;
     v->nodes[v->size] = n;
+    v->size++;
 }
 
 inode inode_vec_remove(inode_vec *v, size_t i) {

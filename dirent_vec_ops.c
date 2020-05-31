@@ -21,8 +21,8 @@ void dirent_vec_push(dirent_vec *v, dirent d) {
         v->entries = new_nodes;
         v->capacity*=2;
     }
-    v->size++;
     v->entries[v->size] = d;
+    v->size++;
 }
 
 dirent dirent_vec_remove(dirent_vec *v, size_t i) {

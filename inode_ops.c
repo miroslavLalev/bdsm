@@ -1,6 +1,9 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <assert.h>
+#include <unistd.h>
+#include <stdio.h>
+#include <errno.h>
 
 #include "inode.h"
 #include "encutils.h"
@@ -86,4 +89,44 @@ uint8_t inode_get_a_perm(uint16_t mode) {
 
 uint8_t inode_get_n_type(uint16_t mode) {
     return (mode & T_BITS) >> 9;
+}
+
+ssize_t inode_desc_read(inode_descriptor *d, uint8_t *data, size_t size) {
+    if (d->zone == ZONES_SIZE - 1 && d->offset == d->block_size) {
+        return 0; // EOF
+    }
+    if (d->n.zones[d->zone] == 0) {
+        return 0; // EOF
+    }
+    // TODO: size > max_size check
+
+    uint8_t *cur_data = data;
+    size_t cur_size;
+    while (cur_size < size) {
+        uint64_t cur_offset = d->data_offset + (d->n.zones[d->zone]-1) * d->block_size + d->offset;
+        // TODO: implement indirect zones
+        if (lseek(d->fd, cur_offset, SEEK_SET) == -1) {
+            return -1;
+        }
+        ssize_t r_res = read(d->fd, cur_data, d->block_size - d->offset);
+        if (r_res < 0) {
+            return r_res;
+        }
+        if (r_res == 0) {
+            return cur_size; // EOF
+        }
+
+        d->zone++;
+        d->offset=0;
+        cur_size += r_res;
+        cur_data += r_res;
+        if (d->zone == ZONES_SIZE || d->n.zones[d->zone] == 0) {
+            return cur_size; // EOF
+        }
+    }
+    return cur_size;
+}
+
+ssize_t inode_desc_write(inode_descriptor *d, uint8_t *data, size_t size) {
+    return -1;
 }

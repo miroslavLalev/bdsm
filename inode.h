@@ -3,7 +3,6 @@
 
 #include <stdint.h>
 
-#define INODE_SIZE 64
 #define ZONES_SIZE 10
 
 // octal numbers for inode type
@@ -25,9 +24,21 @@ struct inode_str {
 typedef struct inode_str inode;
 
 struct inode_bytes_str {
-    uint8_t data[INODE_SIZE];
+    uint8_t data[sizeof(inode)];
 };
 
 typedef struct inode_bytes_str inode_bytes;
+
+struct inode_descriptor_str {
+    inode n;
+    uint16_t offset; // local to the current zone
+    uint8_t zone;
+    uint16_t block_size;
+
+    int fd;
+    int data_offset;
+};
+
+typedef struct inode_descriptor_str inode_descriptor;
 
 #endif

@@ -13,11 +13,9 @@ layout layout_recreate(sblock sb);
 
 void layout_drop(layout *l);
 
-size_t layout_size(layout *l);
+size_t layout_size(sblock sb);
 
 void layout_encode(layout *l, uint8_t *buf);
-
-layout layout_decode(uint8_t *buf);
 
 // fill layout's map blocks
 void layout_extend(layout *l, uint8_t *mb_buf);
