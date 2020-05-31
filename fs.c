@@ -13,6 +13,14 @@
 #include "fs_path.h"
 #include "inode.h"
 #include "inode_ops.h"
+#include "inode_vec.h"
+#include "inode_vec_ops.h"
+#include "dirent.h"
+#include "dirent_ops.h"
+#include "dirent_vec.h"
+#include "dirent_vec_ops.h"
+#include "mblock.h"
+#include "mblock_ops.h"
 
 fs_error bdsm_mkfs(char *fs_file) {
     int fd = open(fs_file, O_CREAT|O_TRUNC|O_RDWR, 0660);
@@ -167,20 +175,11 @@ fs_error bdsm_stat(char *fs_file, char *obj_path) {
 }
 
 fs_error bdsm_mkdir(char *fs_file, char *dir_path) {
-    char **segments;
-    size_t path_size = fs_path_split(dir_path, segments);
+    size_t path_size = 0;
+    char **segments = fs_path_split(dir_path, &path_size);
     if (path_size == 0) {
         // TODO: propagate fs_path_errno
         return INVALID_PATH_ERR;
-    }
-    if (path_size == 1) {
-        if (
-            strcmp(".", segments[0]) == 0 ||
-            strcmp("..", segments[0]) == 0
-        ) {
-            // noop
-            return NO_ERR;
-        }
     }
 
     int fd = open(fs_file, O_RDWR);
@@ -215,11 +214,68 @@ fs_error bdsm_mkdir(char *fs_file, char *dir_path) {
     }
     layout_extend(&l, mb_buf);
 
-    int i;
-    for (i=0; i<path_size-1; i++) {
-        // ensure path exists
+    inode iroot = inode_vec_get(l.nodes, 0);
+    inode_descriptor idesc = idesc_create(l, iroot, fd);
+    uint8_t *buf = (uint8_t*)malloc(1024); // read first zone for now
+    ssize_t id_r_bytes = inode_desc_read(&idesc, buf, 1024);
+    if (id_r_bytes == -1) {
+        return READ_ERR;
     }
-    // create last segment
+
+    dirent_vec dv = dirent_vec_init(100);
+    size_t spl;
+    for (spl=0; spl < (size_t)id_r_bytes; spl+=64) {
+        dirent_bytes db;
+        memcpy(db.data, buf, 64);
+        buf+=64;
+
+        dirent_vec_push(&dv, dirent_decode(db));
+    }
+
+    if (dv.size == 0) {
+        // empty root, just create
+        if (path_size != 1) {
+            return NEXST_PATH_ERR;
+        }
+
+        dirent d;
+        strncpy(d.name, segments[0], DIRENT_NAME_SIZE);
+        d.inode_nr = mblock_vec_take_first(&l.inode_mb);
+        if (d.inode_nr == 0) {
+            // no space
+            return NO_INODE_ERR;
+        }
+
+        inode n;
+        inode_set_mode(&n, M_READ|M_WRITE|M_EXEC, M_READ|M_EXEC, 0, M_DIR);
+        n.nr_links = 1;
+        n.size = 0;
+        memset(n.zones, 0, ZONES_SIZE);
+        inode_vec_set(&l.nodes, n, d.inode_nr);
+
+        dirent_bytes db = dirent_encode(d);
+        if (inode_desc_write(&idesc, db.data, 64) == -1) {
+            return WRITE_ERR;
+        }
+
+        size_t buf_size = layout_size(sb);
+        uint8_t *buf = (uint8_t*)malloc(buf_size);
+        layout_encode(&l, buf);
+
+        if (lseek(fd, 0, SEEK_SET) == -1) {
+            return WRITE_ERR;
+        }
+        if (write(fd, buf, buf_size) == -1) {
+            return WRITE_ERR;
+        }
+    } else {
+        size_t i;
+        for (i=1; i<path_size-1; i++) {
+            // ensure path exists
+        }
+        // create last segment
+    }
+
 
     layout_drop(&l);
     int c_ret = close(fd);

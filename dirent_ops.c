@@ -4,7 +4,7 @@
 #include "dirent.h"
 #include "encutils.h"
 
-dirent_bytes encode_dirent(dirent d) {
+dirent_bytes dirent_encode(dirent d) {
     dirent_bytes db;
     size_t offset = 0;
     enc_u32(d.inode_nr, db.data, &offset);
@@ -12,7 +12,7 @@ dirent_bytes encode_dirent(dirent d) {
     return db;
 }
 
-dirent decode_dirent(dirent_bytes db) {
+dirent dirent_decode(dirent_bytes db) {
     dirent d;
     size_t offset = 0;
     d.inode_nr = dec_u32(db.data, &offset);

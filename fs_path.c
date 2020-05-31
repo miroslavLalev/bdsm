@@ -1,9 +1,10 @@
 #include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
 
 int fs_path_errno;
 
-size_t fs_path_split(char *path, char **res) {
+char **fs_path_split(char *path, size_t *size) {
     size_t p_size = strlen(path);
     if (p_size == 0) {
         fs_path_errno = 1; // empty path
@@ -14,15 +15,17 @@ size_t fs_path_split(char *path, char **res) {
         return 0;
     }
 
+    char **res = (char**)malloc(sizeof(char*));
+
     size_t i=1, res_size=0;
-    char *curr_segment = "";
-    while (i<res_size) {
+    char *curr_segment = (char*)malloc(100);
+    while (i<p_size) {
         if (!(
             // allowed symbols are [a-z],[A-Z],[0-9],[-_.]
             (path[i] >= 'a' && path[i] <= 'z') ||
             (path[i] >= 'A' && path[i] <= 'z') ||
             (path[i] >= '0' && path[i] <= '9') ||
-            (path[i] == '-' || path[i] == '_' || path[i] == '.')
+            (path[i] == '-' || path[i] == '_' || path[i] == '.' || path[i] == '/')
         )) {
             fs_path_errno = 3; // invalid characters in path
             return 0;
@@ -30,7 +33,7 @@ size_t fs_path_split(char *path, char **res) {
 
         if (path[i] != '/') {
             curr_segment = strncat(curr_segment, &path[i], 1);
-            if (i != res_size-1) {
+            if (i != p_size-1) {
                 i++;
                 continue;
             }
@@ -53,14 +56,19 @@ size_t fs_path_split(char *path, char **res) {
         }
         free(res);
 
-        new_res[j+1] = (char*)malloc(seg_len);
-        strcpy(new_res[j+1], curr_segment);
-
+        if (j != 0) {
+            j++;
+        }
+        new_res[j] = (char*)malloc(seg_len+1);
+        strcpy(new_res[j], curr_segment);
         res = new_res;
         res_size++;
         i++;
+        free(curr_segment);
+        curr_segment = (char*)malloc(100);
     }
 
+    *size = res_size;
     fs_path_errno = 0;
-    return res_size;
+    return res;
 }

@@ -99,7 +99,7 @@ int main(int argc, char *argv[]) {
             return 1;
         }
 
-        fs_error err = bdsm_stat(fs_file, argv_rem[0]);
+        fs_error err = bdsm_mkdir(fs_file, argv_rem[0]);
         if (err != NO_ERR) {
             fprintf(stderr, "mkdir error\n");
             return 1;

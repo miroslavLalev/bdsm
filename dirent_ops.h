@@ -3,8 +3,8 @@
 
 #include "dirent.h"
 
-dirent_bytes encode_dirent(dirent d);
+dirent_bytes dirent_encode(dirent d);
 
-dirent decode_dirent(dirent_bytes db);
+dirent dirent_decode(dirent_bytes db);
 
 #endif

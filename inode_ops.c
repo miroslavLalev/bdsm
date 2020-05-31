@@ -154,5 +154,5 @@ ssize_t inode_desc_write(inode_descriptor *d, uint8_t *data, size_t size) {
             return -1; // partial write
         }
     }
-    return -1;
+    return cur_size;
 }
