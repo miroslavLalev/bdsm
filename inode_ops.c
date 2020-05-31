@@ -101,7 +101,7 @@ ssize_t inode_desc_read(inode_descriptor *d, uint8_t *data, size_t size) {
     // TODO: size > max_size check
 
     uint8_t *cur_data = data;
-    size_t cur_size;
+    size_t cur_size = 0;
     while (cur_size < size) {
         uint64_t cur_offset = d->data_offset + (d->n.zones[d->zone]-1) * d->block_size + d->offset;
         // TODO: implement indirect zones
@@ -127,6 +127,32 @@ ssize_t inode_desc_read(inode_descriptor *d, uint8_t *data, size_t size) {
     return cur_size;
 }
 
+// assume that enough zones are allocated before calling the method
 ssize_t inode_desc_write(inode_descriptor *d, uint8_t *data, size_t size) {
+    if (d->zone == ZONES_SIZE && size > (uint16_t)(d->block_size - d->offset)) {
+        return -1; // not enough space
+    }
+
+    uint8_t *cur_data = data;
+    size_t cur_size = 0;
+    while (cur_size < size) {
+        uint64_t cur_offset = d->data_offset + (d->n.zones[d->zone]-1) * d->block_size + d->offset;
+        // TODO: implement indirect zones
+        if (lseek(d->fd, cur_offset, SEEK_SET) == -1) {
+            return -1;
+        }
+        ssize_t w_res = write(d->fd, data, d->block_size - d->offset);
+        if (w_res < 0) {
+            return w_res;
+        }
+
+        d->zone++;
+        d->offset = 0;
+        cur_size += w_res;
+        cur_data += w_res;
+        if (d->zone == ZONES_SIZE) {
+            return -1; // partial write
+        }
+    }
     return -1;
 }

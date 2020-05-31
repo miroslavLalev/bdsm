@@ -60,3 +60,21 @@ uint64_t dec_u64(uint8_t *data, size_t *offset) {
     *offset+=8;
     return res;
 }
+
+void enc_str(char *str, size_t size, uint8_t *data, size_t *offset) {
+    size_t i;
+    for (i=0; i<size; i++) {
+        data[*offset+i] = str[i]; // 1b - 1b
+    }
+    *offset+=size;
+}
+
+char *dec_str(uint8_t *data, size_t *offset, size_t size) {
+    char *res = (char*)malloc(size*sizeof(char));
+    size_t i;
+    for (i=0; i<size; i++) {
+        data[*offset+i] = res[i];
+    }
+    *offset+=size;
+    return res;
+}
