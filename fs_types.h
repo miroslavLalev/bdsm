@@ -13,4 +13,13 @@ struct fs_debug_str {
 
 typedef struct fs_debug_str fs_debug;
 
+struct fs_lsdir_str {
+    char *name;
+    char *mode;
+    uint16_t nr_links;
+    uint64_t size;
+};
+
+typedef struct fs_lsdir_str fs_lsdir;
+
 #endif

@@ -44,22 +44,9 @@ size_t fs_path_split(char *path, char ***segments) {
             continue;
         }
 
-        char **new_res = (char**)malloc((res_size+1)*sizeof(char*));
-        size_t j;
-        for (j=0; j<res_size; j++) {
-            size_t len = strlen(*segments[j])+1; // include '\0'
-            new_res[j] = (char*)malloc(len);
-            strcpy(new_res[j], *segments[j]);
-            free(*segments[j]);
-        }
-        free(*segments);
-
-        if (j != 0) {
-            j++;
-        }
-        new_res[j] = (char*)malloc(seg_len+1);
-        strcpy(new_res[j], curr_segment);
-        *segments = new_res;
+        *segments = (char**)realloc(*segments, res_size+1);
+        (*segments)[res_size]  = (char*)malloc(seg_len+1);
+        strcpy((*segments)[res_size], curr_segment);
         res_size++;
         i++;
         free(curr_segment);

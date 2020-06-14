@@ -1,18 +1,18 @@
-#include <stdlib.h>
 #include <stdint.h>
 #include <math.h>
+#include <stdio.h>
 
 #include "mblock.h"
 
 int rightmost_set_bit(uint8_t val) {
-    return (int)log2(val & (-val)) + 1;
+    return (int)log2(val & (~val + 1)) + 1;
 }
 
 int rightmost_unset_bit(uint8_t val) {
     if (val==0) {
         return 1;
     }
-    if ((val & (val+1)) == 0) {
+    if (val == 0xFF) {
         // all bits set
         return -1;
     }
@@ -20,16 +20,12 @@ int rightmost_unset_bit(uint8_t val) {
 }
 
 int mblock_take_first(mblock *m) {
-    if (m==NULL) {
-        return -1;
-    }
-
     int i;
     for (i=0; i<MBLOCK_SIZE; i++) {
         int r_unset = rightmost_unset_bit(m->data[i]);
         if (r_unset != -1) {
             // set and return
-            m->data[i] = (1 << r_unset) | m->data[i];
+            m->data[i] = (1 << (r_unset-1)) | m->data[i];
             return r_unset * (i+1);
         }
     }
