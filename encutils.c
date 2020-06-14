@@ -73,7 +73,7 @@ char *dec_str(uint8_t *data, size_t *offset, size_t size) {
     char *res = (char*)malloc(size*sizeof(char));
     size_t i;
     for (i=0; i<size; i++) {
-        data[*offset+i] = res[i];
+        res[i] = data[*offset+i];
     }
     *offset+=size;
     return res;

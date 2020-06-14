@@ -4,7 +4,7 @@
 
 int fs_path_errno;
 
-char **fs_path_split(char *path, size_t *size) {
+size_t fs_path_split(char *path, char ***segments) {
     size_t p_size = strlen(path);
     if (p_size == 0) {
         fs_path_errno = 1; // empty path
@@ -14,8 +14,6 @@ char **fs_path_split(char *path, size_t *size) {
         fs_path_errno = 2; // invalid path
         return 0;
     }
-
-    char **res = (char**)malloc(sizeof(char*));
 
     size_t i=1, res_size=0;
     char *curr_segment = (char*)malloc(100);
@@ -49,26 +47,25 @@ char **fs_path_split(char *path, size_t *size) {
         char **new_res = (char**)malloc((res_size+1)*sizeof(char*));
         size_t j;
         for (j=0; j<res_size; j++) {
-            size_t len = strlen(res[j])+1; // include '\0'
+            size_t len = strlen(*segments[j])+1; // include '\0'
             new_res[j] = (char*)malloc(len);
-            strcpy(new_res[j], res[j]);
-            free(res[j]);
+            strcpy(new_res[j], *segments[j]);
+            free(*segments[j]);
         }
-        free(res);
+        free(*segments);
 
         if (j != 0) {
             j++;
         }
         new_res[j] = (char*)malloc(seg_len+1);
         strcpy(new_res[j], curr_segment);
-        res = new_res;
+        *segments = new_res;
         res_size++;
         i++;
         free(curr_segment);
         curr_segment = (char*)malloc(100);
     }
 
-    *size = res_size;
     fs_path_errno = 0;
-    return res;
+    return res_size;
 }

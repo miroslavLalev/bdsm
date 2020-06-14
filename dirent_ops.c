@@ -1,5 +1,6 @@
 #include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
 
 #include "dirent.h"
 #include "encutils.h"
@@ -18,6 +19,6 @@ dirent dirent_decode(dirent_bytes db) {
     d.inode_nr = dec_u32(db.data, &offset);
 
     char *name_str = dec_str(db.data, &offset, DIRENT_NAME_SIZE);
-    memcpy(db.data, name_str, DIRENT_NAME_SIZE);
+    memcpy(d.name, name_str, DIRENT_NAME_SIZE);
     return d;
 }

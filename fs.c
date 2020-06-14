@@ -105,11 +105,12 @@ fs_error bdsm_fsck(char *fs_file) {
     return NO_ERR;
 }
 
-inode_descriptor idesc_create(layout l, inode n, int fd) {
+inode_descriptor idesc_create(layout l, inode *n, mblock_vec *zones_mb, int fd) {
     inode_descriptor id;
     id.block_size = l.sb.block_size;
     id.data_offset = l.sb.first_data_zone;
     id.n = n;
+    id.zones_mb = zones_mb;
     id.fd = fd;
     id.offset = 0;
     return id;
@@ -167,6 +168,54 @@ fs_error bdsm_lsobj(char *fs_file, char *obj_path) {
 }
 
 fs_error bdsm_lsdir(char *fs_file, char *dir_path) {
+    int fd = open(fs_file, O_RDWR);
+    if (fd == -1) {
+        printf("open err\n");
+        // TODO: errno
+        return OPEN_ERR;
+    }
+
+    uint8_t enc_data[1024];
+    ssize_t r_bytes = read(fd, &enc_data, 1024);
+    if (r_bytes == -1) {
+        printf("sb read err\n");
+        // TODO: errno
+        return READ_ERR;
+    }
+    if (r_bytes < 1024) {
+        return CORRUPT_FS_ERR;
+    }
+
+    sblock_bytes sbb;
+    memset(sbb.data, 0, SBLOCK_SIZE * sizeof(uint8_t));
+    memcpy(sbb.data, enc_data, r_bytes);
+    sblock sb = sblock_decode(sbb);
+    layout l = layout_recreate(sb);
+    size_t mb_size = layout_size(sb) - 1024;
+    uint8_t *mb_buf = (uint8_t*)malloc(mb_size);
+    r_bytes = read(fd, mb_buf, mb_size);
+    if (r_bytes == -1) {
+        printf("layout read err\n");
+        return READ_ERR;
+    }
+    if ((size_t)r_bytes < mb_size) {
+        return CORRUPT_FS_ERR;
+    }
+    layout_extend(&l, mb_buf);
+
+    inode iroot = inode_vec_get(l.nodes, 0);
+    inode_descriptor idesc = idesc_create(l, &iroot, &l.zones_mb, fd);
+    uint8_t *buf = (uint8_t*)malloc(1024); // read first zone for now
+    ssize_t id_r_bytes = inode_desc_read_block(&idesc, buf);
+    if (id_r_bytes == -1) {
+        printf("read block err\n");
+        return READ_ERR;
+    }
+
+    dirent_bytes db;
+    memcpy(db.data, buf, 64);
+    dirent de = dirent_decode(db);
+
     return NO_ERR;
 }
 
@@ -175,8 +224,8 @@ fs_error bdsm_stat(char *fs_file, char *obj_path) {
 }
 
 fs_error bdsm_mkdir(char *fs_file, char *dir_path) {
-    size_t path_size = 0;
-    char **segments = fs_path_split(dir_path, &path_size);
+    char **segments = (char**)malloc(100*sizeof(char*));
+    size_t path_size = fs_path_split(dir_path, &segments);
     if (path_size == 0) {
         // TODO: propagate fs_path_errno
         return INVALID_PATH_ERR;
@@ -215,9 +264,9 @@ fs_error bdsm_mkdir(char *fs_file, char *dir_path) {
     layout_extend(&l, mb_buf);
 
     inode iroot = inode_vec_get(l.nodes, 0);
-    inode_descriptor idesc = idesc_create(l, iroot, fd);
+    inode_descriptor idesc = idesc_create(l, &iroot, &l.zones_mb, fd);
     uint8_t *buf = (uint8_t*)malloc(1024); // read first zone for now
-    ssize_t id_r_bytes = inode_desc_read(&idesc, buf, 1024);
+    ssize_t id_r_bytes = inode_desc_read_block(&idesc, buf);
     if (id_r_bytes == -1) {
         return READ_ERR;
     }
@@ -250,11 +299,16 @@ fs_error bdsm_mkdir(char *fs_file, char *dir_path) {
         inode_set_mode(&n, M_READ|M_WRITE|M_EXEC, M_READ|M_EXEC, 0, M_DIR);
         n.nr_links = 1;
         n.size = 0;
-        memset(n.zones, 0, ZONES_SIZE);
+
+        memset(n.zones, 0, ZONES_SIZE*sizeof(uint32_t));
         inode_vec_set(&l.nodes, n, d.inode_nr);
 
+        uint8_t *block = (uint8_t*)malloc(sb.block_size*sizeof(uint8_t));
+        memset(block, 0, sb.block_size*sizeof(uint8_t));
+
         dirent_bytes db = dirent_encode(d);
-        if (inode_desc_write(&idesc, db.data, 64) == -1) {
+        memcpy(block, db.data, 64);
+        if (inode_desc_write_block(&idesc, block) == -1) {
             return WRITE_ERR;
         }
 

@@ -22,8 +22,8 @@ uint8_t inode_get_n_type(uint16_t mode);
 
 inode_descriptor inode_desc_create(inode n);
 
-ssize_t inode_desc_read(inode_descriptor *d, uint8_t *data, size_t size);
+ssize_t inode_desc_read_block(inode_descriptor *d, uint8_t *data);
 
-ssize_t inode_desc_write(inode_descriptor *d, uint8_t *data, size_t size);
+ssize_t inode_desc_write_block(inode_descriptor *d, uint8_t *data);
 
 #endif
