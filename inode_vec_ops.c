@@ -16,10 +16,7 @@ inode_vec inode_vec_init(size_t cap) {
 
 void inode_vec_push(inode_vec *v, inode n) {
     if (v->size == v->capacity) {
-        inode *new_nodes = (inode*)malloc((v->capacity*2)*sizeof(inode));
-        memcpy(new_nodes, v->nodes, v->size);
-        free(v->nodes);
-        v->nodes = new_nodes;
+        v->nodes = (inode*)realloc(v->nodes, (v->capacity*2)*sizeof(inode));
         v->capacity*=2;
     }
     v->nodes[v->size] = n;

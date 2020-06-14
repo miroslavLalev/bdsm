@@ -15,10 +15,7 @@ dirent_vec dirent_vec_init(size_t cap) {
 
 void dirent_vec_push(dirent_vec *v, dirent d) {
     if (v->size == v->capacity) {
-        dirent *new_nodes = (dirent*)malloc((v->capacity*2)*sizeof(dirent));
-        memcpy(new_nodes, v->entries, v->size);
-        free(v->entries);
-        v->entries = new_nodes;
+        v->entries = (dirent*)realloc(v->entries, (v->capacity*2)*sizeof(dirent));
         v->capacity*=2;
     }
     v->entries[v->size] = d;
