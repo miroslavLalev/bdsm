@@ -157,7 +157,9 @@ ssize_t inode_desc_write_block(inode_descriptor *d, uint8_t *data) {
     size_t zi = zone_index(d);
     if (d->n->zones[zi] == 0) {
         int reserved = mblock_vec_take_first(d->zones_mb);
-        assert(reserved > 0);
+        if (reserved <= 0) {
+            return -1;
+        }
         d->n->zones[zi] = reserved;
     }
     if (zi < 7) {

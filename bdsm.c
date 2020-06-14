@@ -27,16 +27,16 @@ int main(int argc, char *argv[]) {
 
     if (strcmp(command, "mkfs") == 0) {
         fs_error err = bdsm_mkfs(fs_file);
-        if (err != NO_ERR) {
-            fprintf(stderr, "mkfs error\n");
+        if (err.errnum != 0) {
+            fprintf(stderr, "mkfs error: %s\n", err.message);
             return 1;
         }
         return 0;
     }
     if (strcmp(command, "fsck") == 0) {
         fs_error err = bdsm_fsck(fs_file);
-        if (err != NO_ERR) {
-            fprintf(stderr, "fsck error\n");
+        if (err.errnum != 0) {
+            fprintf(stderr, "fsck error: %s\n", err.message);
             return 1;
         }
         return 0;
@@ -44,8 +44,8 @@ int main(int argc, char *argv[]) {
     if (strcmp(command, "debug") == 0) {
         fs_debug dbg;
         fs_error err = bdsm_debug(fs_file, &dbg);
-        if (err != NO_ERR) {
-            fprintf(stderr, "debug error\n");
+        if (err.errnum != 0) {
+            fprintf(stderr, "debug error: %s\n", err.message);
             return 1;
         }
         printf("BDSM Debug information:\n");
@@ -61,8 +61,8 @@ int main(int argc, char *argv[]) {
         }
 
         fs_error err = bdsm_lsobj(fs_file, argv_rem[0]);
-        if (err != NO_ERR) {
-            fprintf(stderr, "lsobj error\n");
+        if (err.errnum != 0) {
+            fprintf(stderr, "lsobj error: %s\n", err.message);
             return 1;
         }
         return 0;
@@ -74,8 +74,8 @@ int main(int argc, char *argv[]) {
         }
 
         fs_error err = bdsm_lsdir(fs_file, argv_rem[0]);
-        if (err != NO_ERR) {
-            fprintf(stderr, "lsdir error\n");
+        if (err.errnum != 0) {
+            fprintf(stderr, "lsdir error: %s\n", err.message);
             return 1;
         }
         return 0;
@@ -87,8 +87,8 @@ int main(int argc, char *argv[]) {
         }
 
         fs_error err = bdsm_stat(fs_file, argv_rem[0]);
-        if (err != NO_ERR) {
-            fprintf(stderr, "stat error\n");
+        if (err.errnum != 0) {
+            fprintf(stderr, "stat error: %s\n", err.message);
             return 1;
         }
         return 0;
@@ -100,8 +100,8 @@ int main(int argc, char *argv[]) {
         }
 
         fs_error err = bdsm_mkdir(fs_file, argv_rem[0]);
-        if (err != NO_ERR) {
-            fprintf(stderr, "mkdir error\n");
+        if (err.errnum != 0) {
+            fprintf(stderr, "mkdir error: %s\n", err.message);
             return 1;
         }
         return 0;
@@ -113,8 +113,8 @@ int main(int argc, char *argv[]) {
         }
 
         fs_error err = bdsm_rmdir(fs_file, argv_rem[0]);
-        if (err != NO_ERR) {
-            fprintf(stderr, "rmdir error\n");
+        if (err.errnum != 0) {
+            fprintf(stderr, "rmdir error: %s\n", err.message);
             return 1;
         }
         return 0;
@@ -126,8 +126,8 @@ int main(int argc, char *argv[]) {
         }
 
         fs_error err = bdsm_cpfile(fs_file, argv_rem[0], argv_rem[1]);
-        if (err != NO_ERR) {
-            fprintf(stderr, "cpfile error\n");
+        if (err.errnum != 0) {
+            fprintf(stderr, "cpfile error: %s\n", err.message);
             return 1;
         }
         return 0;
@@ -139,8 +139,8 @@ int main(int argc, char *argv[]) {
         }
 
         fs_error err = bdsm_rmfile(fs_file, argv_rem[0]);
-        if (err != NO_ERR) {
-            fprintf(stderr, "rmfile error\n");
+        if (err.errnum != 0) {
+            fprintf(stderr, "rmfile error: %s\n", err.message);
             return 1;
         }
         return 0;

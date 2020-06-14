@@ -1,19 +1,17 @@
 #ifndef BDSM_ERR_H
 #define BDSM_ERR_H
 
-enum fs_errors {
-    NO_ERR,
-    OPEN_ERR,
-    READ_ERR,
-    WRITE_ERR,
-    INCOMPLETE_WRITE_ERR,
-    CLOSE_ERR,
-    CORRUPT_FS_ERR,
-    INVALID_PATH_ERR,
-    NEXST_PATH_ERR,
-    NO_INODE_ERR,
+#include <stdbool.h>
+
+struct fs_error_str {
+    char *message;
+    int errnum;
 };
 
-typedef enum fs_errors fs_error;
+typedef struct fs_error_str fs_error;
+
+fs_error fs_err_create(char *message, int errnum);
+
+fs_error fs_no_err();
 
 #endif
