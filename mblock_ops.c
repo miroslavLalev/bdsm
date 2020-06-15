@@ -23,16 +23,18 @@ int mblock_take_first(mblock *m) {
     for (i=0; i<MBLOCK_SIZE; i++) {
         int r_unset = rightmost_unset_bit(m->data[i]);
         if (r_unset != -1) {
+            // 0-based indexing
+            r_unset--;
             // set and return
-            m->data[i] = (1 << (r_unset-1)) | m->data[i];
-            return r_unset * (i+1);
+            m->data[i] = (1 << r_unset) | m->data[i];
+            return r_unset + i * 8;
         }
     }
     return -1;
 }
 
 void mblock_unset(mblock *m, int n) {
-    m->data[n/8] &= ~(1 << ((n % 8) - 1));
+    m->data[n/8] &= ~(1 << (n % 8));
 }
 
 mblock_vec mblock_vec_create(size_t size) {
@@ -51,12 +53,12 @@ int mblock_vec_take_first(mblock_vec *mv) {
     for (i=0; i<mv->size; i++) {
         int taken = mblock_take_first(&mv->blocks[i]);
         if (taken != -1) {
-            return taken * (i+1);
+            return taken + i * MBLOCK_ITEMS;
         }
     }
     return -1;
 }
 
 void mblock_vec_unset(mblock_vec *mv, int k) {
-    mblock_unset(&mv->blocks[k/mv->size], k%mv->size);
+    mblock_unset(&mv->blocks[k/MBLOCK_ITEMS], k%MBLOCK_ITEMS);
 }
