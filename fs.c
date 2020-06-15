@@ -149,6 +149,15 @@ fs_error bdsm_debug(char *fs_file, fs_debug *res) {
     res->block_size = l.sb.block_size;
     res->max_size = l.sb.max_size;
     res->n_inodes = l.sb.n_inodes;
+
+    res->inodes = inode_vec_init(l.nodes.capacity);
+    size_t i;
+    for (i=0; i<l.nodes.size; i++) {
+        inode node = inode_vec_get(l.nodes, i);
+        if (node.mode != 0) {
+            inode_vec_push(&res->inodes, node);
+        }
+    }
     // TODO: add more data
 
     layout_drop(&l);
@@ -418,6 +427,7 @@ fs_error bdsm_mkdir(char *fs_file, char *dir_path) {
     dirent_vec_push(&last_dv, d);
 
     inode n;
+    n.mode = 0;
     inode_set_mode(&n, M_READ|M_WRITE|M_EXEC, M_READ|M_EXEC, 0, M_DIR);
     n.nr_links = 1;
     n.size = 0;

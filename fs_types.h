@@ -3,12 +3,15 @@
 
 #include <stdint.h>
 
+#include "inode_vec.h"
+
 struct fs_debug_str {
     // sblock data
     uint32_t n_inodes;
     uint64_t max_size;
     uint16_t block_size;
 
+    inode_vec inodes;
 };
 
 typedef struct fs_debug_str fs_debug;

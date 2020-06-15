@@ -29,7 +29,9 @@ layout layout_init(sblock sb) {
 
     inode iroot;
     iroot.nr_links = 1;
+    iroot.size = 0;
     memset(iroot.zones, 0, ZONES_SIZE * sizeof(uint32_t));
+    iroot.mode = 0;
     inode_set_mode(&iroot, M_READ|M_EXEC, M_READ|M_EXEC, M_READ|M_EXEC, M_DIR);
     int inr = mblock_vec_take_first(&l.inode_mb);
     assert(inr == 1); // root inode should be the first one

@@ -52,6 +52,12 @@ int main(int argc, char *argv[]) {
         printf("\tmax size: %lu\n", dbg.max_size);
         printf("\tblock size: %u\n", dbg.block_size);
         printf("\tmax inodes: %u\n", dbg.n_inodes);
+        printf("\tinodes:\n");
+        size_t i;
+        for (i=0; i<dbg.inodes.size; i++) {
+            printf("\t\tmode=>%d size=>%lu\n", dbg.inodes.nodes[i].mode, dbg.inodes.nodes[i].size);
+        }
+
         return 0;
     }
     if (strcmp(command, "lsobj") == 0) {

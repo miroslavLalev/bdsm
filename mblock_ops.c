@@ -12,8 +12,7 @@ int rightmost_unset_bit(uint8_t val) {
     if (val==0) {
         return 1;
     }
-    if (val == 0xFF) {
-        // all bits set
+    if (val == 0xFF) { // all bits set
         return -1;
     }
     return rightmost_set_bit(~val);
