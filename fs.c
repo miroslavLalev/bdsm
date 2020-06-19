@@ -203,13 +203,109 @@ fs_error load_dirent_vec(int fd, layout *l, size_t inode_num, dirent_vec *dv) {
     return fs_no_err();
 }
 
-fs_error bdsm_lsdir(char *fs_file, char *dir_path) {
+struct resolve_res_str {
+    dirent_vec dv;
+    size_t pnode;
+    size_t last_node;
+    char *last_segment;
+};
+
+typedef struct resolve_res_str resolve_res;
+
+resolve_res new_resolve_res(dirent_vec dv, size_t pnode, size_t last_node) {
+    resolve_res res;
+    res.dv = dv;
+    res.pnode = pnode;
+    res.last_node = last_node;
+    return res;
+}
+
+resolve_res resolve_parent(int fd, char *path, layout *l, fs_error *err) {
+    dirent_vec last_dv = dirent_vec_init(100);
+
     char **segments = (char**)malloc(100*sizeof(char*));
-    size_t path_size = fs_path_split(dir_path, &segments);
+    size_t path_size = fs_path_split(path, &segments);
     if (fs_path_errno != 0) {
-        return fs_err_create("failed to split path", wrap_errno(fs_path_errno));
+        *err = fs_err_create("failed to split path", wrap_errno(fs_path_errno));
+        return new_resolve_res(last_dv, 0, 0);
     }
 
+    resolve_res res = new_resolve_res(last_dv, 0, 0);
+    *err = load_dirent_vec(fd, l, res.pnode, &res.dv);
+    if (err->errnum != 0) {
+        return res;
+    }
+    if (path_size > 0) {
+        res.last_segment = segments[path_size-1];
+
+        size_t i;
+        for (i=0; i<path_size-1; i++) {
+            size_t i_ent, prev_inode = res.pnode;
+            for (i_ent=0; i_ent<res.dv.size; i_ent++) {
+                printf("'%s'\n", segments[i]);
+                if (strcmp(dirent_vec_get(res.dv, i_ent).name, segments[i]) == 0) {
+                res.pnode = dirent_vec_get(res.dv, i_ent).inode_nr;
+                    break;
+                }
+            }
+            if (prev_inode == res.pnode) {
+                *err = fs_err_create("path not found", wrap_errno(0));
+                return res;
+            }
+
+            inode node = inode_vec_get(l->nodes, res.pnode);
+            if (inode_get_n_type(node.mode) != M_DIR) {
+                *err = fs_err_create("failed to list dir: path contains non-dir segements", wrap_errno(0));
+                return res;
+            }
+
+            inode_descriptor idesc = idesc_create(*l, &node, &l->zones_mb, fd);
+            dirent_vec dv = dirent_vec_init(100);
+
+            uint8_t *buf = (uint8_t*)malloc(l->sb.block_size*sizeof(uint8_t));
+            ssize_t rres;
+            while ((rres = inode_desc_read_block(&idesc, buf)) != 0) {
+                if (rres < 0) {
+                    *err = fs_err_create("failed to read directory blocks", wrap_errno(errno));
+                    return res;
+                }
+                bool is_end;
+                size_t s_buf;
+                for (s_buf=0; s_buf<(size_t)rres; s_buf+=sizeof(dirent)) {
+                    dirent_bytes db;
+                    memcpy(db.data, buf, sizeof(dirent));
+                    dirent de = dirent_decode(db);
+                    if (strcmp(de.name, "") == 0) {
+                        is_end = true;
+                        break;
+                    }
+                    dirent_vec_push(&dv, de);
+
+                    buf+=sizeof(dirent);
+                }
+                if (is_end) {
+                    break;
+                }
+
+                buf = (uint8_t*)malloc(l->sb.block_size*sizeof(uint8_t));
+            }
+
+            free(res.dv.entries);
+            res.dv = dv;
+        }
+
+        for(i=0; i<res.dv.size; i++) {
+            dirent de = dirent_vec_get(res.dv, i);
+            if (strcmp(de.name, segments[path_size-1]) == 0) {
+                res.last_node = de.inode_nr;
+            }
+        }
+    }
+
+    return res;
+}
+
+fs_error bdsm_lsdir(char *fs_file, char *dir_path) {
     int fd = open(fs_file, O_RDWR);
     if (fd == -1) {
         return fs_err_create("failed to open VFS file", wrap_errno(errno));
@@ -221,67 +317,21 @@ fs_error bdsm_lsdir(char *fs_file, char *dir_path) {
         return err;
     }
 
-    size_t inode_num = 0;
-    size_t i = 0;
-    dirent_vec last_dv = dirent_vec_init(100);
-    err = load_dirent_vec(fd, &l, inode_num, &last_dv);
+    err = fs_no_err();
+    resolve_res res = resolve_parent(fd, dir_path, &l, &err);
     if (err.errnum != 0) {
         return err;
     }
 
-    for (i=0; i<path_size; i++) {
-        size_t i_ent, prev_inode = inode_num;
-        for (i_ent=0; i_ent<last_dv.size; i_ent++) {
-            if (strcmp(dirent_vec_get(last_dv, i_ent).name, segments[i]) == 0) {
-                inode_num = dirent_vec_get(last_dv, i_ent).inode_nr;
-                break;
-            }
-        }
-        if (prev_inode == inode_num) {
-            return fs_err_create("path not found", wrap_errno(0));
-        }
-
-        inode node = inode_vec_get(l.nodes, inode_num);
-        if (inode_get_n_type(node.mode) != M_DIR) {
-            return fs_err_create("failed to list dir: path contains non-dir segements", wrap_errno(0));
-        }
-
-        inode_descriptor idesc = idesc_create(l, &node, &l.zones_mb, fd);
-        dirent_vec dv = dirent_vec_init(100);
-
-        uint8_t *buf = (uint8_t*)malloc(l.sb.block_size*sizeof(uint8_t));
-        ssize_t rres;
-        while ((rres = inode_desc_read_block(&idesc, buf)) != 0) {
-            if (rres < 0) {
-                return fs_err_create("failed to read directory blocks", wrap_errno(errno));
-            }
-            bool is_end;
-            size_t s_buf;
-            for (s_buf=0; s_buf<(size_t)rres; s_buf+=sizeof(dirent)) {
-                dirent_bytes db;
-                memcpy(db.data, buf, sizeof(dirent));
-                dirent de = dirent_decode(db);
-                if (strcmp(de.name, "") == 0) {
-                    is_end = true;
-                    break;
-                }
-                dirent_vec_push(&dv, de);
-
-                buf+=sizeof(dirent);
-            }
-            if (is_end) {
-                break;
-            }
-
-            buf = (uint8_t*)malloc(l.sb.block_size*sizeof(uint8_t));
-        }
-
-        free(last_dv.entries);
-        last_dv = dv;
+    dirent_vec dv = dirent_vec_init(100);
+    err = load_dirent_vec(fd, &l, res.last_node, &dv);
+    if (err.errnum != 0) {
+        return err;
     }
 
-    for (i=0; i<last_dv.size; i++) {
-        dirent de = dirent_vec_get(last_dv, i);
+    size_t i;
+    for (i=0; i<dv.size; i++) {
+        dirent de = dirent_vec_get(dv, i);
         inode item = inode_vec_get(l.nodes, de.inode_nr);
         printf("%o -- %d -- %ld -- %s\n", item.mode, item.nr_links, item.size, de.name);
     }
@@ -294,12 +344,6 @@ fs_error bdsm_stat(char *fs_file, char *obj_path) {
 }
 
 fs_error bdsm_mkdir(char *fs_file, char *dir_path) {
-    char **segments = (char**)malloc(100*sizeof(char*));
-    size_t path_size = fs_path_split(dir_path, &segments);
-    if (fs_path_errno != 0) {
-        return fs_err_create("failed to split path", fs_path_errno);
-    }
-
     int fd = open(fs_file, O_RDWR);
     if (fd == -1) {
         return fs_err_create("failed to open VFS file", wrap_errno(errno));
@@ -311,78 +355,25 @@ fs_error bdsm_mkdir(char *fs_file, char *dir_path) {
         return err;
     }
 
-    size_t inode_num = 0;
-    size_t i = 0;
-    dirent_vec last_dv = dirent_vec_init(100);
-    err = load_dirent_vec(fd, &l, inode_num, &last_dv);
+    resolve_res res = resolve_parent(fd, dir_path, &l, &err);
     if (err.errnum != 0) {
         return err;
     }
 
-    for (i=0; i<path_size-1; i++) {
-        size_t i_ent, prev_inode = inode_num;
-        for (i_ent=0; i_ent<last_dv.size; i_ent++) {
-            if (strcmp(dirent_vec_get(last_dv, i_ent).name, segments[i]) == 0) {
-                inode_num = dirent_vec_get(last_dv, i_ent).inode_nr;
-                break;
-            }
-        }
-        if (prev_inode == inode_num) {
-            return fs_err_create("path not found", wrap_errno(0));
-        }
-
-        inode node = inode_vec_get(l.nodes, inode_num);
-        if (inode_get_n_type(node.mode) != M_DIR) {
-            return fs_err_create("failed to create dir: path contains non-dir segements", wrap_errno(0));
-        }
-
-        inode_descriptor idesc = idesc_create(l, &node, &l.zones_mb, fd);
-        dirent_vec dv = dirent_vec_init(100);
-
-        uint8_t *buf = (uint8_t*)malloc(l.sb.block_size*sizeof(uint8_t));
-        ssize_t rres;
-        while ((rres = inode_desc_read_block(&idesc, buf)) != 0) {
-            if (rres < 0) {
-                return fs_err_create("failed to read directory blocks", wrap_errno(errno));
-            }
-            bool is_end;
-            size_t s_buf;
-            for (s_buf=0; s_buf<(size_t)rres; s_buf+=sizeof(dirent)) {
-                dirent_bytes db;
-                memcpy(db.data, buf, sizeof(dirent));
-                dirent de = dirent_decode(db);
-                if (strcmp(de.name, "") == 0) {
-                    is_end = true;
-                    break;
-                }
-                dirent_vec_push(&dv, de);
-
-                buf+=sizeof(dirent);
-            }
-            if (is_end) {
-                break;
-            }
-
-            buf = (uint8_t*)malloc(l.sb.block_size*sizeof(uint8_t));
-        }
-
-        free(last_dv.entries);
-        last_dv = dv;
-    }
-
-    for (i=0; i<last_dv.size; i++) {
-        if (strcmp(dirent_vec_get(last_dv, i).name, segments[path_size-1]) == 0) {
+    size_t i;
+    for (i=0; i<res.dv.size; i++) {
+        if (strcmp(dirent_vec_get(res.dv, i).name, res.last_segment) == 0) {
             return fs_err_create("file or directory already exists", wrap_errno(0));
         }
     }
 
     dirent d;
-    strncpy(d.name, segments[path_size-1], DIRENT_NAME_SIZE);
+    strncpy(d.name, res.last_segment, DIRENT_NAME_SIZE);
     d.inode_nr = mblock_vec_take_first(&l.inode_mb);
     if (d.inode_nr <= 0) {
         return fs_err_create("could not allocate more inodes", wrap_errno(0));
     }
-    dirent_vec_push(&last_dv, d);
+    dirent_vec_push(&res.dv, d);
 
     inode n;
     n.mode = 0;
@@ -392,15 +383,16 @@ fs_error bdsm_mkdir(char *fs_file, char *dir_path) {
     memset(n.zones, 0, ZONES_SIZE*sizeof(uint32_t));
     inode_vec_set(&l.nodes, n, d.inode_nr);
 
-    inode parent = inode_vec_get(l.nodes, inode_num);
+    inode parent = inode_vec_get(l.nodes, res.pnode);
+    parent.size = 0; // overwrites are happening
     inode_descriptor pdesc = idesc_create(l, &parent, &l.zones_mb, fd);
 
     uint16_t batch_size = l.sb.block_size / sizeof(dirent);
     dirent_vec batch = dirent_vec_init(batch_size);
-    for (i=0; i<last_dv.size; i++) {
-        dirent_vec_push(&batch, dirent_vec_get(last_dv, i));
+    for (i=0; i<res.dv.size; i++) {
+        dirent_vec_push(&batch, dirent_vec_get(res.dv, i));
         // on batch size or last element
-        if (batch.size == batch_size || i == last_dv.size - 1) {
+        if (batch.size == batch_size || i == res.dv.size - 1) {
             uint8_t *buf = (uint8_t*)malloc(l.sb.block_size);
             uint16_t offset = 0;
             size_t j;
@@ -413,13 +405,13 @@ fs_error bdsm_mkdir(char *fs_file, char *dir_path) {
             if (wres < l.sb.block_size) {
                 return fs_err_create("invalid block write", wrap_errno(errno));
             }
-
+            parent.size += (uint64_t)wres;
             free(batch.entries);
             batch = dirent_vec_init(batch_size);
         }
     }
     // update the parent reference
-    inode_vec_set(&l.nodes, parent, inode_num);
+    inode_vec_set(&l.nodes, parent, res.pnode);
 
     size_t buf_size = layout_size(l.sb);
     uint8_t *buf = (uint8_t*)malloc(buf_size);
@@ -446,12 +438,6 @@ fs_error bdsm_mkdir(char *fs_file, char *dir_path) {
 }
 
 fs_error bdsm_rmdir(char *fs_file, char *dir_path) {
-    char **segments = (char**)malloc(100*sizeof(char*));
-    size_t path_size = fs_path_split(dir_path, &segments);
-    if (fs_path_errno != 0) {
-        return fs_err_create("failed to split path", fs_path_errno);
-    }
-
     int fd = open(fs_file, O_RDWR);
     if (fd == -1) {
         return fs_err_create("failed to open VFS file", wrap_errno(errno));
@@ -463,71 +449,18 @@ fs_error bdsm_rmdir(char *fs_file, char *dir_path) {
         return err;
     }
 
-    size_t inode_num = 0;
-    size_t i = 0;
-    dirent_vec last_dv = dirent_vec_init(100);
-    err = load_dirent_vec(fd, &l, inode_num, &last_dv);
+    resolve_res res = resolve_parent(fd, dir_path, &l, &err);
     if (err.errnum != 0) {
         return err;
-    }
-
-    for (i=0; i<path_size-1; i++) {
-        size_t i_ent, prev_inode = inode_num;
-        for (i_ent=0; i_ent<last_dv.size; i_ent++) {
-            if (strcmp(dirent_vec_get(last_dv, i_ent).name, segments[i]) == 0) {
-                inode_num = dirent_vec_get(last_dv, i_ent).inode_nr;
-                break;
-            }
-        }
-        if (prev_inode == inode_num) {
-            return fs_err_create("path not found", wrap_errno(0));
-        }
-
-        inode node = inode_vec_get(l.nodes, inode_num);
-        if (inode_get_n_type(node.mode) != M_DIR) {
-            return fs_err_create("failed to create dir: path contains non-dir segements", wrap_errno(0));
-        }
-
-        inode_descriptor idesc = idesc_create(l, &node, &l.zones_mb, fd);
-        dirent_vec dv = dirent_vec_init(100);
-
-        uint8_t *buf = (uint8_t*)malloc(l.sb.block_size*sizeof(uint8_t));
-        ssize_t rres;
-        while ((rres = inode_desc_read_block(&idesc, buf)) != 0) {
-            if (rres < 0) {
-                return fs_err_create("failed to read directory blocks", wrap_errno(errno));
-            }
-            bool is_end;
-            size_t s_buf;
-            for (s_buf=0; s_buf<(size_t)rres; s_buf+=sizeof(dirent)) {
-                dirent_bytes db;
-                memcpy(db.data, buf, sizeof(dirent));
-                dirent de = dirent_decode(db);
-                if (strcmp(de.name, "") == 0) {
-                    is_end = true;
-                    break;
-                }
-                dirent_vec_push(&dv, de);
-
-                buf+=sizeof(dirent);
-            }
-            if (is_end) {
-                break;
-            }
-
-            buf = (uint8_t*)malloc(l.sb.block_size*sizeof(uint8_t));
-        }
-
-        free(last_dv.entries);
-        last_dv = dv;
     }
 
     size_t d_ind;
     dirent d;
     d.name[0] = '\0';
-    for (i=0; i<last_dv.size; i++) {
-        dirent tmp = dirent_vec_get(last_dv, i);
-        if (strcmp(tmp.name, segments[path_size-1]) == 0) {
+    size_t i;
+    for (i=0; i<res.dv.size; i++) {
+        dirent tmp = dirent_vec_get(res.dv, i);
+        if (strcmp(tmp.name, res.last_segment) == 0) {
             d = tmp;
             d_ind = i;
             break;
@@ -543,24 +476,25 @@ fs_error bdsm_rmdir(char *fs_file, char *dir_path) {
     }
 
     // remove dirent
-    dirent_vec_remove(&last_dv, d_ind);
+    dirent_vec_remove(&res.dv, d_ind);
     dirent dummy;
     dummy.inode_nr = 0;
     dummy.name[0] = '\0';
-    dirent_vec_push(&last_dv, dummy);
-    for (i=0; i<last_dv.size;i++) {
-        dirent de = dirent_vec_get(last_dv, i);
+    dirent_vec_push(&res.dv, dummy);
+    for (i=0; i<res.dv.size;i++) {
+        dirent de = dirent_vec_get(res.dv, i);
     }
 
-    inode parent = inode_vec_get(l.nodes, inode_num);
+    inode parent = inode_vec_get(l.nodes, res.pnode);
+    parent.size = 0; // overwrites are happening
     inode_descriptor pdesc = idesc_create(l, &parent, &l.zones_mb, fd);
 
     uint16_t batch_size = l.sb.block_size / sizeof(dirent);
     dirent_vec batch = dirent_vec_init(batch_size);
-    for (i=0; i<last_dv.size; i++) {
-        dirent_vec_push(&batch, dirent_vec_get(last_dv, i));
+    for (i=0; i<res.dv.size; i++) {
+        dirent_vec_push(&batch, dirent_vec_get(res.dv, i));
         // on batch size or last element
-        if (batch.size == batch_size || i == last_dv.size - 1) {
+        if (batch.size == batch_size || i == res.dv.size - 1) {
             uint8_t *buf = (uint8_t*)malloc(l.sb.block_size);
             memset(buf, 0, l.sb.block_size);
             uint16_t offset = 0;
@@ -575,12 +509,13 @@ fs_error bdsm_rmdir(char *fs_file, char *dir_path) {
                 return fs_err_create("invalid block write", wrap_errno(errno));
             }
 
+            parent.size += l.sb.block_size;
             free(batch.entries);
             batch = dirent_vec_init(batch_size);
         }
     }
     // update the parent reference
-    inode_vec_set(&l.nodes, parent, inode_num);
+    inode_vec_set(&l.nodes, parent, res.pnode);
 
 
     // remove inode
@@ -622,8 +557,41 @@ fs_error bdsm_rmdir(char *fs_file, char *dir_path) {
     return fs_no_err();
 }
 
-fs_error bdsm_cpfile(char *fs_file, char *path1, char *path2) {
+fs_error cpy_fs_vfs(char *fs_file, char *in, char *out) {
+    char **segments = (char**)malloc(100*sizeof(char*));
+    size_t path_size = fs_path_split(out, &segments);
+    if (fs_path_errno != 0) {
+        return fs_err_create("failed to split path", fs_path_errno);
+    }
+
+    int fd = open(fs_file, O_RDWR);
+    if (fd == -1) {
+        return fs_err_create("failed to open VFS file", wrap_errno(errno));
+    }
+
+    fs_error err = fs_no_err();
+    layout l = parse_layout(fd, &err);
+    if (err.errnum != 0) {
+        return err;
+    }
+
+    int in_fd = open(in, O_RDONLY);
+    if (in_fd == -1) {
+        return fs_err_create("failed to open input file", wrap_errno(errno));
+    }
+
     return fs_no_err();
+}
+
+fs_error cpy_vfs_fs(char *fs_file, char *in, char *out) {
+    return fs_no_err();
+}
+
+fs_error bdsm_cpfile(char *fs_file, char *path1, char *path2) {
+    if (is_fs_path(path1) == 0) {
+        return cpy_vfs_fs(fs_file, path1, path2);
+    }
+    return cpy_fs_vfs(fs_file, path1, path2);
 }
 
 fs_error bdsm_rmfile(char *fs_file, char *file_path) {

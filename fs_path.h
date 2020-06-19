@@ -7,4 +7,6 @@ extern int fs_path_errno;
 
 size_t fs_path_split(char *path, char ***res);
 
+int is_fs_path(char *path);
+
 #endif

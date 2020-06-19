@@ -56,3 +56,10 @@ size_t fs_path_split(char *path, char ***segments) {
     fs_path_errno = 0;
     return res_size;
 }
+
+int is_fs_path(char *path) {
+    if (strlen(path) > 0 && path[0] == '+') {
+        return 0;
+    }
+    return -1;
+}

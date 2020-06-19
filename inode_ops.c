@@ -114,7 +114,13 @@ ssize_t inode_desc_read_block(inode_descriptor *d, uint8_t *data) {
         if (lseek(d->fd, d->data_offset + d->block_size * (d->n->zones[zi]-1), SEEK_SET) < 0) {
             return -1;
         }
-        ssize_t rres = read(d->fd, data, d->block_size);
+        ssize_t rres;
+        if (d->n->size - d->offset < d->block_size) {
+            rres = read(d->fd, data, d->n->size - d->offset);
+        } else {
+            rres = read(d->fd, data, d->block_size);
+        }
+
         if (rres <= 0) {
             return rres;
         }
@@ -131,17 +137,23 @@ ssize_t inode_desc_read_block(inode_descriptor *d, uint8_t *data) {
             return -1;
         }
 
-        uint64_t *zones = (uint64_t*)malloc(d->block_size/sizeof(uint64_t));
-        uint64_t offset = 0;
+        uint32_t *zones = (uint32_t*)malloc(d->block_size/sizeof(uint32_t));
+        size_t offset = 0;
         while (offset < d->block_size) {
-            zones[offset/sizeof(uint64_t)] = dec_u64(buf, &offset);
+            zones[offset/sizeof(uint32_t)] = dec_u32(buf, &offset);
         }
 
-        uint16_t n = ((d->offset/d->block_size)-7)/sizeof(uint64_t);
+        uint16_t n = ((d->offset/d->block_size)-7)/sizeof(uint32_t);
         if (lseek(d->fd, d->data_offset + d->block_size * (d->n->zones[n]-1), SEEK_SET) < 0) {
             return -1;
         }
-        ssize_t rres = read(d->fd, data, d->block_size);
+
+        ssize_t rres;
+        if (d->n->size - d->offset < d->block_size) {
+            rres = read(d->fd, data, d->n->size - d->offset);
+        } else {
+            rres = read(d->fd, data, d->block_size);
+        }
         if (rres <= 0) {
             return rres;
         }
