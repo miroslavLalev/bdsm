@@ -242,7 +242,6 @@ resolve_res resolve_parent(int fd, char *path, layout *l, fs_error *err) {
         for (i=0; i<path_size-1; i++) {
             size_t i_ent, prev_inode = res.pnode;
             for (i_ent=0; i_ent<res.dv.size; i_ent++) {
-                printf("'%s'\n", segments[i]);
                 if (strcmp(dirent_vec_get(res.dv, i_ent).name, segments[i]) == 0) {
                 res.pnode = dirent_vec_get(res.dv, i_ent).inode_nr;
                     break;
@@ -473,6 +472,15 @@ fs_error bdsm_rmdir(char *fs_file, char *dir_path) {
     inode node = inode_vec_get(l.nodes, d.inode_nr);
     if (inode_get_n_type(node.mode) != M_DIR) {
         return fs_err_create("file not a directory", wrap_errno(0));
+    }
+
+    dirent_vec dv = dirent_vec_init(100);
+    err = load_dirent_vec(fd, &l, res.last_node, &dv);
+    if (err.errnum != 0) {
+        return err;
+    }
+    if (dv.size != 0) {
+        return fs_err_create("directory not empty", wrap_errno(0));
     }
 
     // remove dirent
