@@ -205,6 +205,60 @@ fs_error load_dirent_vec(int fd, layout *l, size_t inode_num, dirent_vec *dv) {
     return fs_no_err();
 }
 
+fs_error flush_dv(int fd, layout *l, inode *parent, dirent_vec dv) {
+    parent->size = 0;
+    inode_descriptor pdesc = idesc_create(*l, parent, &l->zones_mb, fd);
+
+    uint16_t batch_size = l->sb.block_size / sizeof(dirent);
+    dirent_vec batch = dirent_vec_init(batch_size);
+    size_t i;
+    for (i=0; i<dv.size; i++) {
+        dirent_vec_push(&batch, dirent_vec_get(dv, i));
+        // on batch size or last element
+        if (batch.size == batch_size || i == dv.size - 1) {
+            uint8_t *buf = (uint8_t*)malloc(l->sb.block_size);
+            uint16_t offset = 0;
+            size_t j;
+            for (j=0; j<batch.size; j++) {
+                dirent_bytes db = dirent_encode(dirent_vec_get(batch, j));
+                memcpy(buf+offset, db.data, sizeof(dirent));
+                offset+=sizeof(dirent);
+            }
+            ssize_t wres = inode_desc_write_block(&pdesc, buf);
+            if (wres < l->sb.block_size) {
+                return fs_err_create("invalid block write", wrap_errno(errno));
+            }
+            parent->size += (uint64_t)wres;
+            free(batch.entries);
+            batch = dirent_vec_init(batch_size);
+        }
+    }
+
+    return fs_no_err();
+}
+
+fs_error add_dirent(int fd, layout *l, uint32_t pnode, dirent d) {
+    inode parent = inode_vec_get(l->nodes, pnode);
+    if (inode_get_n_type(parent.mode) != M_DIR) {
+        return fs_err_create("could not add dirent: parent should be a directory", wrap_errno(0));
+    }
+
+    dirent_vec dv = dirent_vec_init(100);
+    fs_error err = load_dirent_vec(fd, l, pnode, &dv);
+    if (err.errnum != 0) {
+        return err;
+    }
+    dirent_vec_push(&dv, d);
+
+    err = flush_dv(fd, l, &parent, dv);
+    if (err.errnum != 0) {
+        return err;
+    }
+    // update the parent reference
+    inode_vec_set(&l->nodes, parent, pnode);
+    return fs_no_err();
+}
+
 struct resolve_res_str {
     dirent_vec dv;
     size_t pnode;
@@ -384,35 +438,10 @@ fs_error bdsm_mkdir(char *fs_file, char *dir_path) {
     memset(n.zones, 0, ZONES_SIZE*sizeof(uint32_t));
     inode_vec_set(&l.nodes, n, d.inode_nr);
 
-    inode parent = inode_vec_get(l.nodes, res.pnode);
-    parent.size = 0; // overwrites are happening
-    inode_descriptor pdesc = idesc_create(l, &parent, &l.zones_mb, fd);
-
-    uint16_t batch_size = l.sb.block_size / sizeof(dirent);
-    dirent_vec batch = dirent_vec_init(batch_size);
-    for (i=0; i<res.dv.size; i++) {
-        dirent_vec_push(&batch, dirent_vec_get(res.dv, i));
-        // on batch size or last element
-        if (batch.size == batch_size || i == res.dv.size - 1) {
-            uint8_t *buf = (uint8_t*)malloc(l.sb.block_size);
-            uint16_t offset = 0;
-            size_t j;
-            for (j=0; j<batch.size; j++) {
-                dirent_bytes db = dirent_encode(dirent_vec_get(batch, j));
-                memcpy(buf+offset, db.data, sizeof(dirent));
-                offset+=sizeof(dirent);
-            }
-            ssize_t wres = inode_desc_write_block(&pdesc, buf);
-            if (wres < l.sb.block_size) {
-                return fs_err_create("invalid block write", wrap_errno(errno));
-            }
-            parent.size += (uint64_t)wres;
-            free(batch.entries);
-            batch = dirent_vec_init(batch_size);
-        }
+    err = add_dirent(fd, &l, res.pnode, d);
+    if (err.errnum != 0) {
+        return err;
     }
-    // update the parent reference
-    inode_vec_set(&l.nodes, parent, res.pnode);
 
     size_t buf_size = layout_size(l.sb);
     uint8_t *buf = (uint8_t*)malloc(buf_size);
@@ -496,37 +525,10 @@ fs_error bdsm_rmdir(char *fs_file, char *dir_path) {
     }
 
     inode parent = inode_vec_get(l.nodes, res.pnode);
-    parent.size = 0; // overwrites are happening
-    inode_descriptor pdesc = idesc_create(l, &parent, &l.zones_mb, fd);
-
-    uint16_t batch_size = l.sb.block_size / sizeof(dirent);
-    dirent_vec batch = dirent_vec_init(batch_size);
-    for (i=0; i<res.dv.size; i++) {
-        dirent_vec_push(&batch, dirent_vec_get(res.dv, i));
-        // on batch size or last element
-        if (batch.size == batch_size || i == res.dv.size - 1) {
-            uint8_t *buf = (uint8_t*)malloc(l.sb.block_size);
-            memset(buf, 0, l.sb.block_size);
-            uint16_t offset = 0;
-            size_t j;
-            for (j=0; j<batch.size; j++) {
-                dirent_bytes db = dirent_encode(dirent_vec_get(batch, j));
-                memcpy(buf+offset, db.data, sizeof(dirent));
-                offset+=sizeof(dirent);
-            }
-            ssize_t wres = inode_desc_write_block(&pdesc, buf);
-            if (wres < l.sb.block_size) {
-                return fs_err_create("invalid block write", wrap_errno(errno));
-            }
-
-            parent.size += l.sb.block_size;
-            free(batch.entries);
-            batch = dirent_vec_init(batch_size);
-        }
+    err = flush_dv(fd, &l, &parent, res.dv);
+    if (err.errnum != 0) {
+        return err;
     }
-    // update the parent reference
-    inode_vec_set(&l.nodes, parent, res.pnode);
-
 
     // remove inode
     node.mode = 0;
@@ -644,6 +646,14 @@ fs_error cpy_fs_vfs(char *fs_file, char *in, char *out) {
         bytes_to_write -= l.sb.block_size;
     }
     inode_vec_set(&l.nodes, n, inode_num);
+
+    dirent d;
+    d.inode_nr = inode_num;
+    strncpy(d.name, res.last_segment, DIRENT_NAME_SIZE);
+    err = add_dirent(fd, &l, res.pnode, d);
+    if (err.errnum != 0) {
+        return err;
+    }
 
     size_t buf_size = layout_size(l.sb);
     uint8_t *buf = (uint8_t*)malloc(buf_size);
