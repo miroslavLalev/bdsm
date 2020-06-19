@@ -23,33 +23,6 @@ void inode_vec_push(inode_vec *v, inode n) {
     v->size++;
 }
 
-inode inode_vec_remove(inode_vec *v, size_t i) {
-    assert(v->size >= i);
-    inode n = v->nodes[i];
-    v->size--;
-    inode *new_nodes = (inode*)malloc((v->capacity)*sizeof(inode));
-    if (v->size == 0) {
-        free(v->nodes);
-        v->nodes = new_nodes;
-        return n;
-    }
-
-    if (i == 0) {
-        // [1, n)
-        memcpy(new_nodes, v->nodes+1, v->size);
-    } else if (i == v->size + 1) {
-        // [0, n-1)
-        memcpy(new_nodes, v->nodes, v->size);
-    } else {
-        // [0, k) + (k, n)
-        memcpy(new_nodes, v->nodes, i);
-        memcpy(new_nodes+i, v->nodes+i+1, v->size-i);
-    }
-    free(v->nodes);
-    v->nodes = new_nodes;
-    return n;
-}
-
 inode inode_vec_get(inode_vec v, size_t i) {
     assert(v.size >= i);
     return v.nodes[i];

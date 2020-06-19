@@ -10,8 +10,6 @@ inode_vec inode_vec_init(size_t capacity);
 
 void inode_vec_push(inode_vec *v, inode n);
 
-inode inode_vec_remove(inode_vec *v, size_t i);
-
 inode inode_vec_get(inode_vec v, size_t i);
 
 void inode_vec_set(inode_vec *v, inode n, size_t i);

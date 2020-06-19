@@ -66,36 +66,50 @@ fs_error bdsm_mkfs(char *fs_file) {
     return fs_no_err();
 }
 
-fs_error bdsm_fsck(char *fs_file) {
-    int fd = open(fs_file, O_RDWR);
-    if (fd == -1) {
-        return fs_err_create("failed to open VFS file", wrap_errno(errno));
-    }
-
+layout parse_layout(int fd, fs_error *err) {
+    layout l;
     uint8_t enc_data[1024];
     ssize_t r_bytes = read(fd, &enc_data, 1024);
     if (r_bytes == -1) {
-        return fs_err_create("failed to read superblock", wrap_errno(errno));
+        *err = fs_err_create("failed to read superblock", wrap_errno(errno));
+        return l;
     }
     if (r_bytes < 1024) {
-        return fs_err_create("corrupt file: size less than 1024 bytes", wrap_errno(0));
+        *err = fs_err_create("corrupt file: size less than 1024 bytes", wrap_errno(0));
+        return l;
     }
 
     sblock_bytes sbb;
     memset(sbb.data, 0, SBLOCK_SIZE * sizeof(uint8_t));
     memcpy(sbb.data, enc_data, r_bytes);
     sblock sb = sblock_decode(sbb);
-    layout l = layout_recreate(sb);
+    l = layout_recreate(sb);
     size_t mb_size = layout_size(sb) - 1024;
     uint8_t *mb_buf = (uint8_t*)malloc(mb_size);
     r_bytes = read(fd, mb_buf, mb_size);
     if (r_bytes == -1) {
-        return fs_err_create("failed to read layout", wrap_errno(errno));
+        *err = fs_err_create("failed to read layout", wrap_errno(errno));
+        return l;
     }
     if ((size_t)r_bytes < mb_size) {
-        return fs_err_create("corrupt file: size less than required for layout", wrap_errno(0));
+        *err = fs_err_create("corrupt file: size less than required for layout", wrap_errno(0));
+        return l;
     }
     layout_extend(&l, mb_buf);
+    return l;
+}
+
+fs_error bdsm_fsck(char *fs_file) {
+    int fd = open(fs_file, O_RDWR);
+    if (fd == -1) {
+        return fs_err_create("failed to open VFS file", wrap_errno(errno));
+    }
+
+    fs_error err = fs_no_err();
+    layout l = parse_layout(fd, &err);
+    if (err.errnum != 0) {
+        return err;
+    }
     layout_drop(&l);
 
     int c_ret = close(fd);
@@ -122,30 +136,12 @@ fs_error bdsm_debug(char *fs_file, fs_debug *res) {
         return fs_err_create("failed to open VFS file", wrap_errno(errno));
     }
 
-    uint8_t enc_data[1024];
-    ssize_t r_bytes = read(fd, enc_data, 1024);
-    if (r_bytes == -1) {
-        return fs_err_create("failed to read superblock", wrap_errno(errno));
-    }
-    if (r_bytes < 1024) {
-        return fs_err_create("corrupt file: size less than 1024 bytes", wrap_errno(0));
+    fs_error err = fs_no_err();
+    layout l = parse_layout(fd, &err);
+    if (err.errnum != 0) {
+        return err;
     }
 
-    sblock_bytes sbb;
-    memset(sbb.data, 0, SBLOCK_SIZE * sizeof(uint8_t));
-    memcpy(sbb.data, enc_data, r_bytes);
-    sblock sb = sblock_decode(sbb);
-    layout l = layout_recreate(sb);
-    size_t mb_size = layout_size(sb) - 1024;
-    uint8_t *mb_buf = (uint8_t*)malloc(mb_size);
-    r_bytes = read(fd, mb_buf, mb_size);
-    if (r_bytes == -1) {
-        return fs_err_create("failed to read layout", wrap_errno(errno));
-    }
-    if ((size_t)r_bytes < mb_size) {
-        return fs_err_create("corrupt file: size less than required for layout", wrap_errno(0));
-    }
-    layout_extend(&l, mb_buf);
     res->block_size = l.sb.block_size;
     res->max_size = l.sb.max_size;
     res->n_inodes = l.sb.n_inodes;
@@ -180,7 +176,7 @@ fs_error load_dirent_vec(int fd, layout *l, size_t inode_num, dirent_vec *dv) {
     inode_descriptor idesc = idesc_create(*l, &node, &l->zones_mb, fd);
     uint8_t *buf = (uint8_t*)malloc(l->sb.block_size*sizeof(uint8_t));
     ssize_t rres;
-    while ((rres = inode_desc_read_block(&idesc, buf)) > 0) {
+    while ((rres = inode_desc_read_block(&idesc, buf)) != 0) {
         if (rres < 0) {
             return fs_err_create("failed to read directory blocks", wrap_errno(errno));
         }
@@ -219,35 +215,16 @@ fs_error bdsm_lsdir(char *fs_file, char *dir_path) {
         return fs_err_create("failed to open VFS file", wrap_errno(errno));
     }
 
-    uint8_t enc_data[1024];
-    ssize_t r_bytes = read(fd, &enc_data, 1024);
-    if (r_bytes == -1) {
-        return fs_err_create("failed to read superblock", wrap_errno(errno));
+    fs_error err = fs_no_err();
+    layout l = parse_layout(fd, &err);
+    if (err.errnum != 0) {
+        return err;
     }
-    if (r_bytes < 1024) {
-        return fs_err_create("corrupt file: size less than 1024 bytes", wrap_errno(0));
-    }
-
-    sblock_bytes sbb;
-    memset(sbb.data, 0, SBLOCK_SIZE * sizeof(uint8_t));
-    memcpy(sbb.data, enc_data, r_bytes);
-    sblock sb = sblock_decode(sbb);
-    layout l = layout_recreate(sb);
-    size_t mb_size = layout_size(sb) - 1024;
-    uint8_t *mb_buf = (uint8_t*)malloc(mb_size);
-    r_bytes = read(fd, mb_buf, mb_size);
-    if (r_bytes == -1) {
-        return fs_err_create("failed to read layout", wrap_errno(errno));
-    }
-    if ((size_t)r_bytes < mb_size) {
-        return fs_err_create("corrupt file: size less than required for layout", wrap_errno(0));
-    }
-    layout_extend(&l, mb_buf);
 
     size_t inode_num = 0;
     size_t i = 0;
     dirent_vec last_dv = dirent_vec_init(100);
-    fs_error err = load_dirent_vec(fd, &l, inode_num, &last_dv);
+    err = load_dirent_vec(fd, &l, inode_num, &last_dv);
     if (err.errnum != 0) {
         return err;
     }
@@ -266,15 +243,15 @@ fs_error bdsm_lsdir(char *fs_file, char *dir_path) {
 
         inode node = inode_vec_get(l.nodes, inode_num);
         if (inode_get_n_type(node.mode) != M_DIR) {
-            return fs_err_create("failed to create dir: path contains non-dir segements", wrap_errno(0));
+            return fs_err_create("failed to list dir: path contains non-dir segements", wrap_errno(0));
         }
 
         inode_descriptor idesc = idesc_create(l, &node, &l.zones_mb, fd);
         dirent_vec dv = dirent_vec_init(100);
 
-        uint8_t *buf = (uint8_t*)malloc(sb.block_size*sizeof(uint8_t));
+        uint8_t *buf = (uint8_t*)malloc(l.sb.block_size*sizeof(uint8_t));
         ssize_t rres;
-        while ((rres = inode_desc_read_block(&idesc, buf)) > 0) {
+        while ((rres = inode_desc_read_block(&idesc, buf)) != 0) {
             if (rres < 0) {
                 return fs_err_create("failed to read directory blocks", wrap_errno(errno));
             }
@@ -296,7 +273,7 @@ fs_error bdsm_lsdir(char *fs_file, char *dir_path) {
                 break;
             }
 
-            buf = (uint8_t*)malloc(sb.block_size*sizeof(uint8_t));
+            buf = (uint8_t*)malloc(l.sb.block_size*sizeof(uint8_t));
         }
 
         free(last_dv.entries);
@@ -328,35 +305,16 @@ fs_error bdsm_mkdir(char *fs_file, char *dir_path) {
         return fs_err_create("failed to open VFS file", wrap_errno(errno));
     }
 
-    uint8_t enc_data[1024];
-    ssize_t r_bytes = read(fd, &enc_data, 1024);
-    if (r_bytes == -1) {
-        return fs_err_create("failed to read superblock", wrap_errno(errno));
+    fs_error err = fs_no_err();
+    layout l = parse_layout(fd, &err);
+    if (err.errnum != 0) {
+        return err;
     }
-    if (r_bytes < 1024) {
-        return fs_err_create("corrupt file: size less than 1024 bytes", wrap_errno(0));
-    }
-
-    sblock_bytes sbb;
-    memset(sbb.data, 0, SBLOCK_SIZE * sizeof(uint8_t));
-    memcpy(sbb.data, enc_data, r_bytes);
-    sblock sb = sblock_decode(sbb);
-    layout l = layout_recreate(sb);
-    size_t mb_size = layout_size(sb) - 1024;
-    uint8_t *mb_buf = (uint8_t*)malloc(mb_size);
-    r_bytes = read(fd, mb_buf, mb_size);
-    if (r_bytes == -1) {
-        return fs_err_create("failed to read layout", wrap_errno(errno));
-    }
-    if ((size_t)r_bytes < mb_size) {
-        return fs_err_create("corrupt file: size less than required for layout", wrap_errno(0));
-    }
-    layout_extend(&l, mb_buf);
 
     size_t inode_num = 0;
     size_t i = 0;
     dirent_vec last_dv = dirent_vec_init(100);
-    fs_error err = load_dirent_vec(fd, &l, inode_num, &last_dv);
+    err = load_dirent_vec(fd, &l, inode_num, &last_dv);
     if (err.errnum != 0) {
         return err;
     }
@@ -381,9 +339,9 @@ fs_error bdsm_mkdir(char *fs_file, char *dir_path) {
         inode_descriptor idesc = idesc_create(l, &node, &l.zones_mb, fd);
         dirent_vec dv = dirent_vec_init(100);
 
-        uint8_t *buf = (uint8_t*)malloc(sb.block_size*sizeof(uint8_t));
+        uint8_t *buf = (uint8_t*)malloc(l.sb.block_size*sizeof(uint8_t));
         ssize_t rres;
-        while ((rres = inode_desc_read_block(&idesc, buf)) > 0) {
+        while ((rres = inode_desc_read_block(&idesc, buf)) != 0) {
             if (rres < 0) {
                 return fs_err_create("failed to read directory blocks", wrap_errno(errno));
             }
@@ -405,7 +363,7 @@ fs_error bdsm_mkdir(char *fs_file, char *dir_path) {
                 break;
             }
 
-            buf = (uint8_t*)malloc(sb.block_size*sizeof(uint8_t));
+            buf = (uint8_t*)malloc(l.sb.block_size*sizeof(uint8_t));
         }
 
         free(last_dv.entries);
@@ -437,13 +395,13 @@ fs_error bdsm_mkdir(char *fs_file, char *dir_path) {
     inode parent = inode_vec_get(l.nodes, inode_num);
     inode_descriptor pdesc = idesc_create(l, &parent, &l.zones_mb, fd);
 
-    uint16_t batch_size = sb.block_size / sizeof(dirent);
+    uint16_t batch_size = l.sb.block_size / sizeof(dirent);
     dirent_vec batch = dirent_vec_init(batch_size);
     for (i=0; i<last_dv.size; i++) {
         dirent_vec_push(&batch, dirent_vec_get(last_dv, i));
         // on batch size or last element
         if (batch.size == batch_size || i == last_dv.size - 1) {
-            uint8_t *buf = (uint8_t*)malloc(sb.block_size);
+            uint8_t *buf = (uint8_t*)malloc(l.sb.block_size);
             uint16_t offset = 0;
             size_t j;
             for (j=0; j<batch.size; j++) {
@@ -452,7 +410,7 @@ fs_error bdsm_mkdir(char *fs_file, char *dir_path) {
                 offset+=sizeof(dirent);
             }
             ssize_t wres = inode_desc_write_block(&pdesc, buf);
-            if (wres < sb.block_size) {
+            if (wres < l.sb.block_size) {
                 return fs_err_create("invalid block write", wrap_errno(errno));
             }
 
@@ -463,7 +421,7 @@ fs_error bdsm_mkdir(char *fs_file, char *dir_path) {
     // update the parent reference
     inode_vec_set(&l.nodes, parent, inode_num);
 
-    size_t buf_size = layout_size(sb);
+    size_t buf_size = layout_size(l.sb);
     uint8_t *buf = (uint8_t*)malloc(buf_size);
     layout_encode(&l, buf);
     layout_drop(&l);
@@ -488,6 +446,179 @@ fs_error bdsm_mkdir(char *fs_file, char *dir_path) {
 }
 
 fs_error bdsm_rmdir(char *fs_file, char *dir_path) {
+    char **segments = (char**)malloc(100*sizeof(char*));
+    size_t path_size = fs_path_split(dir_path, &segments);
+    if (fs_path_errno != 0) {
+        return fs_err_create("failed to split path", fs_path_errno);
+    }
+
+    int fd = open(fs_file, O_RDWR);
+    if (fd == -1) {
+        return fs_err_create("failed to open VFS file", wrap_errno(errno));
+    }
+
+    fs_error err = fs_no_err();
+    layout l = parse_layout(fd, &err);
+    if (err.errnum != 0) {
+        return err;
+    }
+
+    size_t inode_num = 0;
+    size_t i = 0;
+    dirent_vec last_dv = dirent_vec_init(100);
+    err = load_dirent_vec(fd, &l, inode_num, &last_dv);
+    if (err.errnum != 0) {
+        return err;
+    }
+
+    for (i=0; i<path_size-1; i++) {
+        size_t i_ent, prev_inode = inode_num;
+        for (i_ent=0; i_ent<last_dv.size; i_ent++) {
+            if (strcmp(dirent_vec_get(last_dv, i_ent).name, segments[i]) == 0) {
+                inode_num = dirent_vec_get(last_dv, i_ent).inode_nr;
+                break;
+            }
+        }
+        if (prev_inode == inode_num) {
+            return fs_err_create("path not found", wrap_errno(0));
+        }
+
+        inode node = inode_vec_get(l.nodes, inode_num);
+        if (inode_get_n_type(node.mode) != M_DIR) {
+            return fs_err_create("failed to create dir: path contains non-dir segements", wrap_errno(0));
+        }
+
+        inode_descriptor idesc = idesc_create(l, &node, &l.zones_mb, fd);
+        dirent_vec dv = dirent_vec_init(100);
+
+        uint8_t *buf = (uint8_t*)malloc(l.sb.block_size*sizeof(uint8_t));
+        ssize_t rres;
+        while ((rres = inode_desc_read_block(&idesc, buf)) != 0) {
+            if (rres < 0) {
+                return fs_err_create("failed to read directory blocks", wrap_errno(errno));
+            }
+            bool is_end;
+            size_t s_buf;
+            for (s_buf=0; s_buf<(size_t)rres; s_buf+=sizeof(dirent)) {
+                dirent_bytes db;
+                memcpy(db.data, buf, sizeof(dirent));
+                dirent de = dirent_decode(db);
+                if (strcmp(de.name, "") == 0) {
+                    is_end = true;
+                    break;
+                }
+                dirent_vec_push(&dv, de);
+
+                buf+=sizeof(dirent);
+            }
+            if (is_end) {
+                break;
+            }
+
+            buf = (uint8_t*)malloc(l.sb.block_size*sizeof(uint8_t));
+        }
+
+        free(last_dv.entries);
+        last_dv = dv;
+    }
+
+    size_t d_ind;
+    dirent d;
+    d.name[0] = '\0';
+    for (i=0; i<last_dv.size; i++) {
+        dirent tmp = dirent_vec_get(last_dv, i);
+        if (strcmp(tmp.name, segments[path_size-1]) == 0) {
+            d = tmp;
+            d_ind = i;
+            break;
+        }
+    }
+    if (strlen(d.name) == 0) {
+        return fs_err_create("directory does not exist", wrap_errno(0));
+    }
+
+    inode node = inode_vec_get(l.nodes, d.inode_nr);
+    if (inode_get_n_type(node.mode) != M_DIR) {
+        return fs_err_create("file not a directory", wrap_errno(0));
+    }
+
+    // remove dirent
+    dirent_vec_remove(&last_dv, d_ind);
+    dirent dummy;
+    dummy.inode_nr = 0;
+    dummy.name[0] = '\0';
+    dirent_vec_push(&last_dv, dummy);
+    for (i=0; i<last_dv.size;i++) {
+        dirent de = dirent_vec_get(last_dv, i);
+    }
+
+    inode parent = inode_vec_get(l.nodes, inode_num);
+    inode_descriptor pdesc = idesc_create(l, &parent, &l.zones_mb, fd);
+
+    uint16_t batch_size = l.sb.block_size / sizeof(dirent);
+    dirent_vec batch = dirent_vec_init(batch_size);
+    for (i=0; i<last_dv.size; i++) {
+        dirent_vec_push(&batch, dirent_vec_get(last_dv, i));
+        // on batch size or last element
+        if (batch.size == batch_size || i == last_dv.size - 1) {
+            uint8_t *buf = (uint8_t*)malloc(l.sb.block_size);
+            memset(buf, 0, l.sb.block_size);
+            uint16_t offset = 0;
+            size_t j;
+            for (j=0; j<batch.size; j++) {
+                dirent_bytes db = dirent_encode(dirent_vec_get(batch, j));
+                memcpy(buf+offset, db.data, sizeof(dirent));
+                offset+=sizeof(dirent);
+            }
+            ssize_t wres = inode_desc_write_block(&pdesc, buf);
+            if (wres < l.sb.block_size) {
+                return fs_err_create("invalid block write", wrap_errno(errno));
+            }
+
+            free(batch.entries);
+            batch = dirent_vec_init(batch_size);
+        }
+    }
+    // update the parent reference
+    inode_vec_set(&l.nodes, parent, inode_num);
+
+
+    // remove inode
+    node.mode = 0;
+    node.nr_links = 0;
+    node.size = 0;
+    for (i=0; i<ZONES_SIZE; i++) {
+        if (node.zones[i] != 0) {
+            mblock_vec_unset(&l.zones_mb, node.zones[i]-1);
+        }
+        // we don't have to touch the contents of the zones,
+        // they will be overwritten
+        node.zones[i] = 0;
+    }
+    inode_vec_set(&l.nodes, node, d.inode_nr);
+    mblock_vec_unset(&l.inode_mb, d.inode_nr);
+
+    size_t buf_size = layout_size(l.sb);
+    uint8_t *buf = (uint8_t*)malloc(buf_size);
+    layout_encode(&l, buf);
+    layout_drop(&l);
+
+    if (lseek(fd, 0, SEEK_SET) < 0) {
+        return fs_err_create("failed to seek in VFS file", wrap_errno(errno));
+    }
+    ssize_t wr_bytes = write(fd, buf, buf_size);
+    free(buf);
+    if (wr_bytes == -1) {
+        return fs_err_create("failed to persist layout", wrap_errno(errno));
+    }
+    if ((size_t)wr_bytes < buf_size) {
+        return fs_err_create("failed to persist layout: corrupted write", wrap_errno(0));
+    }
+
+    int c_ret = close(fd);
+    if (c_ret == -1) {
+        return fs_err_create("failed to close VFS file", wrap_errno(errno));
+    }
     return fs_no_err();
 }
 

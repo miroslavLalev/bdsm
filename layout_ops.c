@@ -34,10 +34,10 @@ layout layout_init(sblock sb) {
     iroot.mode = 0;
     inode_set_mode(&iroot, M_READ|M_EXEC, M_READ|M_EXEC, M_READ|M_EXEC, M_DIR);
     int inr = mblock_vec_take_first(&l.inode_mb);
-    assert(inr == 1); // root inode should be the first one
+    assert(inr == 0); // root inode should be the first one
     int znr = mblock_vec_take_first(&l.zones_mb);
-    assert(znr == 1); // root zone should be the first one
-    iroot.zones[0] = znr;
+    assert(znr == 0); // root zone should be the first one
+    iroot.zones[0] = znr+1;
     inode_vec_push(&l.nodes, iroot);
 
     size_t i;

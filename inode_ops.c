@@ -160,7 +160,7 @@ ssize_t inode_desc_write_block(inode_descriptor *d, uint8_t *data) {
         if (reserved <= 0) {
             return -1;
         }
-        d->n->zones[zi] = reserved;
+        d->n->zones[zi] = reserved+1;
     }
     if (zi < 7) {
         if (lseek(d->fd, d->data_offset + d->block_size * (d->n->zones[zi]-1), SEEK_SET) < 0) {

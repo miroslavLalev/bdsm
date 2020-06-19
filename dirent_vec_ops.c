@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <string.h>
+#include <stdio.h>
 
 #include "dirent.h"
 #include "dirent_vec.h"
@@ -35,14 +36,14 @@ dirent dirent_vec_remove(dirent_vec *v, size_t i) {
 
     if (i == 0) {
         // [1, n)
-        memcpy(new_nodes, v->entries+1, v->size);
-    } else if (i == v->size + 1) {
+        memcpy(new_nodes, &(v->entries[1]), v->size*sizeof(dirent));
+    } else if (i == v->size) {
         // [0, n-1)
-        memcpy(new_nodes, v->entries, v->size);
+        memcpy(new_nodes, v->entries, v->size*sizeof(dirent));
     } else {
         // [0, k) + (k, n)
-        memcpy(new_nodes, v->entries, i);
-        memcpy(new_nodes+i, v->entries+i+1, v->size-i);
+        memcpy(new_nodes, v->entries, i*sizeof(dirent));
+        memcpy(&new_nodes[i], &(v->entries[i+1]), (v->size-i)*sizeof(dirent));
     }
     free(v->entries);
     v->entries = new_nodes;
