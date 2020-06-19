@@ -683,6 +683,54 @@ fs_error cpy_fs_vfs(char *fs_file, char *in, char *out) {
 }
 
 fs_error cpy_vfs_fs(char *fs_file, char *in, char *out) {
+    int fd = open(fs_file, O_RDWR);
+    if (fd == -1) {
+        return fs_err_create("failed to open VFS file", wrap_errno(errno));
+    }
+
+    fs_error err = fs_no_err();
+    layout l = parse_layout(fd, &err);
+    if (err.errnum != 0) {
+        return err;
+    }
+
+    int out_fd = open(out, O_WRONLY|O_TRUNC|O_CREAT);
+    if (out_fd == -1) {
+        return fs_err_create("failed to open output file", wrap_errno(errno));
+    }
+
+    resolve_res res = resolve_parent(fd, in, &l, &err);
+    if (err.errnum != 0) {
+        return err;
+    }
+    inode node = inode_vec_get(l.nodes, res.last_node);
+    if (inode_get_n_type(node.mode) != M_FILE) {
+        return fs_err_create("could not copy file: not a file", wrap_errno(0));
+    }
+
+    inode_descriptor idesc = idesc_create(l, &node, &l.zones_mb, fd);
+    int64_t size = node.size;
+    while (size > 0) {
+        uint8_t *buf = (uint8_t*)malloc(l.sb.block_size);
+        if (inode_desc_read_block(&idesc, buf) <= 0) {
+            return fs_err_create("failed to read virtual file", wrap_errno(0));
+        }
+
+        ssize_t wres;
+        if (l.sb.block_size > size) {
+            wres = write(out_fd, buf, size);
+        } else {
+            wres = write(out_fd, buf, l.sb.block_size);
+        }
+        if (wres <= 0) {
+            return fs_err_create("failed to write in output file", wrap_errno(errno));
+        }
+        size -= l.sb.block_size;
+    }
+
+    if (close(fd) == -1) {
+        return fs_err_create("failed to close VFS file", wrap_errno(errno));
+    }
     return fs_no_err();
 }
 
