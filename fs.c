@@ -5,6 +5,8 @@
 #include <stdio.h>
 #include <errno.h>
 #include <assert.h>
+#include <sys/types.h>
+#include <sys/stat.h>
 
 #include "bdsmerr.h"
 #include "layout.h"
@@ -588,7 +590,86 @@ fs_error cpy_fs_vfs(char *fs_file, char *in, char *out) {
         return fs_err_create("failed to open input file", wrap_errno(errno));
     }
 
+    struct stat in_s;
+    if (fstat(in_fd, &in_s) < 0) {
+        return fs_err_create("failed to stat input file", wrap_errno(errno));
+    }
+    // TODO: size check
+
+    resolve_res res = resolve_parent(fd, out, &l, &err);
+    if (err.errnum != 0) {
+        return err;
+    }
+
+    size_t inode_num = 0;
+    size_t i;
+    for (i=0; i<res.dv.size; i++) {
+        dirent de = dirent_vec_get(res.dv, i);
+        if (strcmp(de.name, res.last_segment) == 0) {
+            inode_num = de.inode_nr;
+            break;
+        }
+    }
+    if (inode_num == 0) {
+        inode n;
+        n.mode = 0;
+        inode_set_mode(&n, M_READ|M_WRITE|M_EXEC, M_READ|M_WRITE, M_READ, M_FILE);
+        n.nr_links = 0;
+        n.size = in_s.st_size;
+        memset(n.zones, 0, ZONES_SIZE*sizeof(uint32_t));
+
+        int reserved = mblock_vec_take_first(&l.inode_mb);
+        if (reserved <= 0) {
+            return fs_err_create("failed to create file: no inodes left", wrap_errno(0));
+        }
+        inode_vec_set(&l.nodes, n, reserved);
+        inode_num = reserved;
+    }
+
+    inode n = inode_vec_get(l.nodes, inode_num);
+    n.size = in_s.st_size;
+    inode_descriptor ndesc = idesc_create(l, &n, &l.zones_mb, fd);
+
+    int64_t bytes_to_write = in_s.st_size;
+    while (bytes_to_write > 0) {
+        uint8_t *buf = (uint8_t*)malloc(l.sb.block_size);
+        memset(buf, 0, l.sb.block_size);
+
+        if (read(in_fd, buf, l.sb.block_size) <= 0) {
+            return fs_err_create("failed to read input file", wrap_errno(errno));
+        }
+        if (inode_desc_write_block(&ndesc, buf) <= 0) {
+            return fs_err_create("failed to write VFS file", wrap_errno(0));
+        }
+        bytes_to_write -= l.sb.block_size;
+    }
+    inode_vec_set(&l.nodes, n, inode_num);
+
+    size_t buf_size = layout_size(l.sb);
+    uint8_t *buf = (uint8_t*)malloc(buf_size);
+    layout_encode(&l, buf);
+    layout_drop(&l);
+
+    if (lseek(fd, 0, SEEK_SET) < 0) {
+        return fs_err_create("failed to seek in VFS file", wrap_errno(errno));
+    }
+    ssize_t wr_bytes = write(fd, buf, buf_size);
+    free(buf);
+    if (wr_bytes == -1) {
+        return fs_err_create("failed to persist layout", wrap_errno(errno));
+    }
+    if ((size_t)wr_bytes < buf_size) {
+        return fs_err_create("failed to persist layout: corrupted write", wrap_errno(0));
+    }
+
+    if (close(fd) == -1) {
+        return fs_err_create("failed to close VFS file", wrap_errno(errno));
+    }
+    if (close(in_fd) == -1) {
+        return fs_err_create("failed to close input file", wrap_errno(0));
+    }
     return fs_no_err();
+
 }
 
 fs_error cpy_vfs_fs(char *fs_file, char *in, char *out) {
