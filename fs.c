@@ -8,6 +8,8 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <time.h>
+#include <pwd.h>
+#include <grp.h>
 
 #include "bdsmerr.h"
 #include "layout.h"
@@ -194,11 +196,25 @@ void print_inode(inode n, dirent de) {
         t_str[strlen(t_str)-1] = '\0';
     }
 
-    printf("%s %d %d %d %ld %s %s\n",
+    struct passwd *pwd = getpwuid(n.oid);
+    struct group *grp = getgrgid(n.gid);
+
+    if (pwd == NULL || grp == NULL) {
+        printf("%s %d %d %d %ld %s %s\n",
+            mstr,
+            n.nr_links,
+            n.oid,
+            n.gid,
+            n.size,
+            t_str,
+            de.name);
+        return;
+    }
+    printf("%s %d %s %s %ld %s %s\n",
         mstr,
         n.nr_links,
-        n.oid,
-        n.gid,
+        pwd->pw_name,
+        grp->gr_name,
         n.size,
         t_str,
         de.name);
