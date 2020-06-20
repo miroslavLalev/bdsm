@@ -145,12 +145,49 @@ size_t zone_index(inode_descriptor *d) {
     }
     n_dzone -= 7;
 
-    uint16_t c_indirect = d->block_size/sizeof(uint64_t);
+    uint16_t c_indirect = d->block_size/sizeof(uint32_t);
     if (n_dzone < c_indirect) {
         return 7;
     }
-    assert(1);
     return -1;
+}
+
+ssize_t deref_zone(inode_descriptor *d, size_t i, uint32_t *zones) {
+    uint8_t *buf = (uint8_t*)malloc(d->block_size*sizeof(uint8_t));
+    if (lseek(d->fd, d->data_offset + d->block_size * (d->n->zones[i]-1), SEEK_SET) < 0) {
+        return -1;
+    }
+    ssize_t zones_res = read(d->fd, buf, d->block_size);
+    if (zones_res < d->block_size) {
+        return -1;
+    }
+
+    memset(zones, 0, d->block_size);
+    size_t offset = 0;
+    while (offset < d->block_size) {
+        zones[offset/sizeof(uint32_t)] = dec_u32(buf, &offset);
+    }
+    free(buf);
+    return 0;
+}
+
+ssize_t persist_zone(inode_descriptor *d, size_t i, uint32_t *zones) {
+    uint8_t *buf = (uint8_t*)malloc(d->block_size);
+    memset(buf, 0, d->block_size);
+    
+    size_t offset = 0;
+    while (offset < d->block_size) {
+        enc_u32(zones[offset/sizeof(uint32_t)], buf, &offset);
+    }
+    if (lseek(d->fd, d->data_offset + d->block_size * (d->n->zones[i]-1), SEEK_SET) < 0) {
+        return -1;
+    }
+    ssize_t zwres = write(d->fd, buf, d->block_size);
+    if (zwres <= 0) {
+        return -1;
+    }
+    free(buf);
+    return 0;
 }
 
 ssize_t inode_desc_read_block(inode_descriptor *d, uint8_t *data) {
@@ -173,23 +210,16 @@ ssize_t inode_desc_read_block(inode_descriptor *d, uint8_t *data) {
         return rres;
     }
     if (zi == 7) {
-        uint8_t *buf = (uint8_t*)malloc(d->block_size*sizeof(uint8_t));
-        if (lseek(d->fd, d->data_offset + d->block_size * (d->n->zones[zi]-1), SEEK_SET) < 0) {
-            return -1;
-        }
-        ssize_t zones_res = read(d->fd, buf, d->block_size);
-        if (zones_res < d->block_size) {
+        uint32_t *zones = (uint32_t*)malloc(d->block_size);
+        if (deref_zone(d, zi, zones) < 0) {
             return -1;
         }
 
-        uint32_t *zones = (uint32_t*)malloc(d->block_size/sizeof(uint32_t));
-        size_t offset = 0;
-        while (offset < d->block_size) {
-            zones[offset/sizeof(uint32_t)] = dec_u32(buf, &offset);
+        uint16_t n = ((d->offset/d->block_size)-7);
+        if (zones[n] == 0) {
+            return 0;
         }
-
-        uint16_t n = ((d->offset/d->block_size)-7)/sizeof(uint32_t);
-        if (lseek(d->fd, d->data_offset + d->block_size * (d->n->zones[n]-1), SEEK_SET) < 0) {
+        if (lseek(d->fd, d->data_offset + d->block_size * (zones[n]-1), SEEK_SET) < 0) {
             return -1;
         }
 
@@ -209,7 +239,6 @@ ssize_t inode_desc_read_block(inode_descriptor *d, uint8_t *data) {
     return -1;
 }
 
-// assume that enough zones are allocated before calling the method
 ssize_t inode_desc_write_block(inode_descriptor *d, uint8_t *data) {
     size_t zi = zone_index(d);
     if (d->n->zones[zi] == 0) {
@@ -227,6 +256,44 @@ ssize_t inode_desc_write_block(inode_descriptor *d, uint8_t *data) {
         if (rres <= 0) {
             return rres;
         }
+        d->offset += d->block_size;
+        return rres;
+    }
+    if (zi == 7) {    
+        uint32_t *zones = (uint32_t*)malloc(d->block_size);
+        if (deref_zone(d, zi, zones) < 0) {
+            return -1;
+        } 
+
+        int new_zone = 1;
+        uint16_t n = ((d->offset/d->block_size)-7);
+        if (zones[n] == 0) {
+            int reserved = mblock_vec_take_first(d->zones_mb);
+            if (reserved <= 0) {
+                return -1;
+            }
+            zones[n] = reserved+1;
+            new_zone = 0;
+        }
+        if (lseek(d->fd, d->data_offset + d->block_size * (zones[n]-1), SEEK_SET) < 0) {
+            return -1;
+        }
+
+        ssize_t rres;
+        if (d->n->size - d->offset < d->block_size) {
+            rres = write(d->fd, data, d->n->size - d->offset);
+        } else {
+            rres = write(d->fd, data, d->block_size);
+        }
+        if (rres <= 0) {
+            return rres;
+        }
+
+        if (new_zone == 0 && persist_zone(d, zi, zones) < 0) {
+            return -1;
+        }
+
+        free(zones);
         d->offset += d->block_size;
         return rres;
     }
@@ -256,7 +323,7 @@ ssize_t inode_desc_reset_zones(inode_descriptor *d) {
             return -1;
         }
 
-        uint32_t *zones = (uint32_t*)malloc(d->block_size/sizeof(uint32_t));
+        uint32_t *zones = (uint32_t*)malloc(d->block_size);
         size_t offset = 0;
         while (offset < d->block_size) {
             zones[offset/sizeof(uint32_t)] = dec_u32(buf, &offset);

@@ -272,7 +272,7 @@ resolve_res new_resolve_res(dirent_vec dv, size_t pnode, size_t last_node) {
 }
 
 resolve_res resolve_parent(int fd, char *path, layout *l, fs_error *err) {
-    dirent_vec last_dv = dirent_vec_init(100);
+    dirent_vec last_dv = dirent_vec_init(5);
 
     char **segments = (char**)malloc(100*sizeof(char*));
     size_t path_size = fs_path_split(path, &segments);
@@ -310,7 +310,7 @@ resolve_res resolve_parent(int fd, char *path, layout *l, fs_error *err) {
             }
 
             inode_descriptor idesc = idesc_create(*l, &node, &l->zones_mb, fd);
-            dirent_vec dv = dirent_vec_init(100);
+            dirent_vec dv = dirent_vec_init(5);
 
             uint8_t *buf = (uint8_t*)malloc(l->sb.block_size*sizeof(uint8_t));
             ssize_t rres;
@@ -441,7 +441,7 @@ fs_error add_dirent(int fd, layout *l, uint32_t pnode, dirent d) {
         return fs_err_create("could not add dirent: parent should be a directory", wrap_errno(0));
     }
 
-    dirent_vec dv = dirent_vec_init(100);
+    dirent_vec dv = dirent_vec_init(5);
     fs_error err = load_dirent_vec(fd, l, pnode, &dv);
     if (err.errnum != 0) {
         return err;
@@ -452,6 +452,8 @@ fs_error add_dirent(int fd, layout *l, uint32_t pnode, dirent d) {
     if (err.errnum != 0) {
         return err;
     }
+
+    free(dv.entries);
     // update the parent reference
     inode_vec_set(&l->nodes, parent, pnode);
     return fs_no_err();
@@ -480,7 +482,7 @@ fs_error bdsm_lsdir(char *fs_file, char *dir_path) {
         return fs_err_create("could not list: not a directory", wrap_errno(0));
     }
 
-    dirent_vec dv = dirent_vec_init(100);
+    dirent_vec dv = dirent_vec_init(5);
     err = load_dirent_vec(fd, &l, res.last_node, &dv);
     if (err.errnum != 0) {
         return err;
@@ -491,7 +493,7 @@ fs_error bdsm_lsdir(char *fs_file, char *dir_path) {
         dirent de = dirent_vec_get(dv, i);
         print_inode(inode_vec_get(l.nodes, de.inode_nr), de);
     }
-
+    free(dv.entries);
     int c_ret = close(fd);
     if (c_ret == -1) {
         return fs_err_create("failed to close VFS file", wrap_errno(errno));
@@ -662,7 +664,7 @@ fs_error bdsm_rmdir(char *fs_file, char *dir_path) {
         return fs_err_create("file not a directory", wrap_errno(0));
     }
 
-    dirent_vec dv = dirent_vec_init(100);
+    dirent_vec dv = dirent_vec_init(5);
     err = load_dirent_vec(fd, &l, res.last_node, &dv);
     if (err.errnum != 0) {
         return err;
@@ -670,6 +672,7 @@ fs_error bdsm_rmdir(char *fs_file, char *dir_path) {
     if (dv.size != 0) {
         return fs_err_create("directory not empty", wrap_errno(0));
     }
+    free(dv.entries);
 
     // remove dirent
     dirent_vec_remove(&res.dv, d_ind);
@@ -819,8 +822,8 @@ fs_error cpy_fs_vfs(char *fs_file, char *in, char *out) {
     inode_descriptor ndesc = idesc_create(l, &n, &l.zones_mb, fd);
 
     int64_t bytes_to_write = in_s.st_size;
+    uint8_t *buf = (uint8_t*)malloc(l.sb.block_size);
     while (bytes_to_write > 0) {
-        uint8_t *buf = (uint8_t*)malloc(l.sb.block_size);
         memset(buf, 0, l.sb.block_size);
 
         if (read(in_fd, buf, l.sb.block_size) <= 0) {
@@ -831,6 +834,7 @@ fs_error cpy_fs_vfs(char *fs_file, char *in, char *out) {
         }
         bytes_to_write -= l.sb.block_size;
     }
+    free(buf);
     inode_vec_set(&l.nodes, n, inode_num);
 
     dirent d;
@@ -842,7 +846,7 @@ fs_error cpy_fs_vfs(char *fs_file, char *in, char *out) {
     }
 
     size_t buf_size = layout_size(l.sb);
-    uint8_t *buf = (uint8_t*)malloc(buf_size);
+    buf = (uint8_t*)malloc(buf_size);
     layout_encode(&l, buf);
     layout_drop(&l);
 
