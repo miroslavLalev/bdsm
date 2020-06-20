@@ -7,6 +7,7 @@
 #include <assert.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <time.h>
 
 #include "bdsmerr.h"
 #include "layout.h"
@@ -52,8 +53,6 @@ fs_error bdsm_mkfs(char *fs_file) {
     sb.imap_blocks = 10; // 81920 total inodes
     sb.zmap_blocks = 10000; //  78 GB total size of data blocks
     sb.max_size = fs_size;
-    sb.zones = UINT64_MAX;
-    // TODO: block_size could be _asserted_ command line argument
     sb.block_size = 1024;
 
     layout l = layout_init(sb);
@@ -447,9 +446,15 @@ fs_error bdsm_mkdir(char *fs_file, char *dir_path) {
 
     inode n;
     n.mode = 0;
-    inode_set_mode(&n, M_READ|M_WRITE|M_EXEC, M_READ|M_EXEC, 0, M_DIR);
+    inode_set_mode(&n, M_READ|M_WRITE|M_EXEC, M_READ|M_EXEC, M_READ|M_EXEC, M_DIR);
     n.nr_links = 1;
     n.size = 0;
+    n.oid = 0;
+    n.gid = 0;
+
+    time_t now = time(NULL);
+    memcpy(&n.mtime, &now, sizeof(n.mtime));
+
     memset(n.zones, 0, ZONES_SIZE*sizeof(uint32_t));
     inode_vec_set(&l.nodes, n, d.inode_nr);
 
@@ -617,12 +622,18 @@ fs_error cpy_fs_vfs(char *fs_file, char *in, char *out) {
             break;
         }
     }
+
     if (inode_num == 0) {
         inode n;
         n.mode = 0;
-        inode_set_mode(&n, M_READ|M_WRITE|M_EXEC, M_READ|M_WRITE, M_READ, M_FILE);
+        inode_set_mode(&n, M_READ|M_WRITE|M_EXEC, M_READ|M_WRITE, M_READ, M_FILE); // TODO: mode from actual file
         n.nr_links = 0;
         n.size = in_s.st_size;
+        n.oid = in_s.st_uid & 0xFFFF;
+        n.gid = in_s.st_gid & 0xFFFF;
+
+        time_t now = time(NULL);
+        memcpy(&n.mtime, &now, sizeof(n.mtime));
         memset(n.zones, 0, ZONES_SIZE*sizeof(uint32_t));
 
         int reserved = mblock_vec_take_first(&l.inode_mb);
@@ -699,7 +710,7 @@ fs_error cpy_vfs_fs(char *fs_file, char *in, char *out) {
         return err;
     }
 
-    int out_fd = open(out, O_WRONLY|O_TRUNC|O_CREAT, 0640);
+    int out_fd = open(out, O_WRONLY|O_TRUNC|O_CREAT, 0644);
     if (out_fd == -1) {
         return fs_err_create("failed to open output file", wrap_errno(errno));
     }

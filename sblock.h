@@ -12,7 +12,6 @@ struct sblock_str {
     uint16_t zmap_blocks;
     uint64_t first_data_zone;
     uint64_t max_size;
-    uint64_t zones;
     uint16_t block_size;
 };
 

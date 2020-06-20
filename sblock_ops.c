@@ -15,7 +15,6 @@ sblock_bytes sblock_encode(sblock s) {
     enc_u16(s.zmap_blocks, sbb.data, &offset);
     enc_u64(s.first_data_zone, sbb.data, &offset);
     enc_u64(s.max_size, sbb.data, &offset);
-    enc_u64(s.zones, sbb.data, &offset);
     enc_u16(s.block_size, sbb.data, &offset);
     return sbb;
 }
@@ -29,7 +28,6 @@ sblock sblock_decode(sblock_bytes sbb) {
     s.zmap_blocks = dec_u16(sbb.data, &offset);
     s.first_data_zone = dec_u64(sbb.data, &offset);
     s.max_size = dec_u64(sbb.data, &offset);
-    s.zones = dec_u64(sbb.data, &offset);
     s.block_size = dec_u16(sbb.data, &offset);
     return s;
 }

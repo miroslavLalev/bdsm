@@ -17,10 +17,13 @@ struct inode_str {
     uint16_t mode;
     uint16_t nr_links;
     uint64_t size;
+    uint16_t oid;
+    uint16_t gid;
+    uint32_t mtime;
     uint32_t zones[ZONES_SIZE];
 
     // make up to 64 bytes in size;
-    uint8_t pad[12];
+    uint8_t pad[4];
 };
 
 typedef struct inode_str inode;

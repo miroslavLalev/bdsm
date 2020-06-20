@@ -28,11 +28,14 @@ layout layout_init(sblock sb) {
     l.nodes = inode_vec_init(sb.n_inodes);
 
     inode iroot;
-    iroot.nr_links = 1;
-    iroot.size = 0;
-    memset(iroot.zones, 0, ZONES_SIZE * sizeof(uint32_t));
     iroot.mode = 0;
     inode_set_mode(&iroot, M_READ|M_EXEC, M_READ|M_EXEC, M_READ|M_EXEC, M_DIR);
+    iroot.nr_links = 1;
+    iroot.size = 0;
+    iroot.oid = 0;
+    iroot.gid = 0;
+    iroot.mtime = 0;
+    memset(iroot.zones, 0, ZONES_SIZE * sizeof(uint32_t));
     int inr = mblock_vec_take_first(&l.inode_mb);
     assert(inr == 0); // root inode should be the first one
     int znr = mblock_vec_take_first(&l.zones_mb);
@@ -46,6 +49,9 @@ layout layout_init(sblock sb) {
         n.mode = 0;
         n.nr_links = 0;
         n.size = 0;
+        n.oid = 0;
+        n.gid = 0;
+        n.mtime = 0;
         memset(n.zones, 0, ZONES_SIZE * sizeof(uint32_t));
         inode_vec_push(&l.nodes, n);
     }

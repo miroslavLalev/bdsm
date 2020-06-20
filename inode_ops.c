@@ -20,6 +20,9 @@ inode_bytes inode_encode(inode n) {
     enc_u16(n.mode, nb.data, &offset);
     enc_u16(n.nr_links, nb.data, &offset);
     enc_u64(n.size, nb.data, &offset);
+    enc_u16(n.oid, nb.data, &offset);
+    enc_u16(n.gid, nb.data, &offset);
+    enc_u32(n.mtime, nb.data, &offset);
 
     size_t i;
     for (i=0; i<ZONES_SIZE; i++) {
@@ -34,6 +37,9 @@ inode inode_decode(inode_bytes nb) {
     n.mode = dec_u16(nb.data, &offset);
     n.nr_links = dec_u16(nb.data, &offset);
     n.size = dec_u64(nb.data, &offset);
+    n.oid = dec_u16(nb.data, &offset);
+    n.gid = dec_u16(nb.data, &offset);
+    n.mtime = dec_u32(nb.data, &offset);
 
     size_t i;
     for (i=0; i<ZONES_SIZE; i++) {
