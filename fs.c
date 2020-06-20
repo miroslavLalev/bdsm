@@ -684,7 +684,7 @@ fs_error cpy_vfs_fs(char *fs_file, char *in, char *out) {
         return err;
     }
 
-    int out_fd = open(out, O_WRONLY|O_TRUNC|O_CREAT);
+    int out_fd = open(out, O_WRONLY|O_TRUNC|O_CREAT, 0640);
     if (out_fd == -1) {
         return fs_err_create("failed to open output file", wrap_errno(errno));
     }
