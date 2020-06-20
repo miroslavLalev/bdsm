@@ -3,7 +3,6 @@
 
 #include <stdint.h>
 
-#define SBLOCK_FS_NUM 0x4242
 #define SBLOCK_SIZE 1024
 
 struct sblock_str {

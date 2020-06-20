@@ -9,7 +9,7 @@ sblock_bytes sblock_encode(sblock s) {
     sblock_bytes sbb;
     memset(sbb.data, 0, SBLOCK_SIZE * sizeof(uint8_t));
     size_t offset = 0;
-    enc_u16(SBLOCK_FS_NUM, sbb.data, &offset);
+    enc_u16(s.fs_num, sbb.data, &offset);
     enc_u32(s.n_inodes, sbb.data, &offset);
     enc_u16(s.imap_blocks, sbb.data, &offset);
     enc_u16(s.zmap_blocks, sbb.data, &offset);

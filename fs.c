@@ -30,18 +30,28 @@ int wrap_errno(int no) {
     return no ? no : -1;
 }
 
+const uint16_t FS_NUM = ((uint16_t)'b' << 4) + ((uint16_t)'d' << 3) + ((uint16_t)'s' << 2) + (uint16_t)'m';
+
 fs_error bdsm_mkfs(char *fs_file) {
-    int fd = open(fs_file, O_CREAT|O_TRUNC|O_RDWR, 0660);
+    int fd = open(fs_file, O_RDWR);
     if (fd == -1) {
         return fs_err_create("failed to open VFS file", wrap_errno(errno));
     }
 
+    struct stat s;
+    if (fstat(fd, &s) < 0) {
+        return fs_err_create("could not get VFS file metadata", wrap_errno(errno));
+    }
+    // make the max size divisible by 512
+    uint64_t fs_size = (s.st_size / 512) * 512; 
+
     sblock sb;
     // TODO: pick fields according to the size of the given file
+    sb.fs_num = FS_NUM;
     sb.n_inodes = 10000;
     sb.imap_blocks = 10; // 81920 total inodes
     sb.zmap_blocks = 10000; //  78 GB total size of data blocks
-    sb.max_size = UINT64_MAX;
+    sb.max_size = fs_size;
     sb.zones = UINT64_MAX;
     // TODO: block_size could be _asserted_ command line argument
     sb.block_size = 1024;
@@ -85,6 +95,11 @@ layout parse_layout(int fd, fs_error *err) {
     memset(sbb.data, 0, SBLOCK_SIZE * sizeof(uint8_t));
     memcpy(sbb.data, enc_data, r_bytes);
     sblock sb = sblock_decode(sbb);
+    if (sb.fs_num != FS_NUM) {
+        *err = fs_err_create("corrupt VFS: not a BDSM filesystem", wrap_errno(0));
+        return l;
+    }
+
     l = layout_recreate(sb);
     size_t mb_size = layout_size(sb) - 1024;
     uint8_t *mb_buf = (uint8_t*)malloc(mb_size);
