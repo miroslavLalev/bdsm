@@ -182,8 +182,26 @@ fs_error bdsm_debug(char *fs_file, fs_debug *res) {
     return fs_no_err();
 }
 
-fs_error bdsm_lsobj(char *fs_file, char *obj_path) {
-    return fs_no_err();
+void print_inode(inode n, dirent de) {
+    char mstr[11];
+    inode_mode_str(n.mode, mstr);
+
+    time_t t = 0;
+    memcpy(&t, &n.mtime, sizeof(time_t));
+    char *t_str = asctime(gmtime(&t));
+    if (t_str[strlen(t_str)-1] == '\n') {
+        // asctime might put newline at the end
+        t_str[strlen(t_str)-1] = '\0';
+    }
+
+    printf("%s %d %d %d %ld %s %s\n",
+        mstr,
+        n.nr_links,
+        n.oid,
+        n.gid,
+        n.size,
+        t_str,
+        de.name);
 }
 
 fs_error load_dirent_vec(int fd, layout *l, size_t inode_num, dirent_vec *dv) {
@@ -217,60 +235,6 @@ fs_error load_dirent_vec(int fd, layout *l, size_t inode_num, dirent_vec *dv) {
 
         buf = (uint8_t*)malloc(l->sb.block_size*sizeof(uint8_t));
     }
-    return fs_no_err();
-}
-
-fs_error flush_dv(int fd, layout *l, inode *parent, dirent_vec dv) {
-    parent->size = 0;
-    inode_descriptor pdesc = idesc_create(*l, parent, &l->zones_mb, fd);
-
-    uint16_t batch_size = l->sb.block_size / sizeof(dirent);
-    dirent_vec batch = dirent_vec_init(batch_size);
-    size_t i;
-    for (i=0; i<dv.size; i++) {
-        dirent_vec_push(&batch, dirent_vec_get(dv, i));
-        // on batch size or last element
-        if (batch.size == batch_size || i == dv.size - 1) {
-            uint8_t *buf = (uint8_t*)malloc(l->sb.block_size);
-            uint16_t offset = 0;
-            size_t j;
-            for (j=0; j<batch.size; j++) {
-                dirent_bytes db = dirent_encode(dirent_vec_get(batch, j));
-                memcpy(buf+offset, db.data, sizeof(dirent));
-                offset+=sizeof(dirent);
-            }
-            ssize_t wres = inode_desc_write_block(&pdesc, buf);
-            if (wres < l->sb.block_size) {
-                return fs_err_create("invalid block write", wrap_errno(errno));
-            }
-            parent->size += (uint64_t)wres;
-            free(batch.entries);
-            batch = dirent_vec_init(batch_size);
-        }
-    }
-
-    return fs_no_err();
-}
-
-fs_error add_dirent(int fd, layout *l, uint32_t pnode, dirent d) {
-    inode parent = inode_vec_get(l->nodes, pnode);
-    if (inode_get_n_type(parent.mode) != M_DIR) {
-        return fs_err_create("could not add dirent: parent should be a directory", wrap_errno(0));
-    }
-
-    dirent_vec dv = dirent_vec_init(100);
-    fs_error err = load_dirent_vec(fd, l, pnode, &dv);
-    if (err.errnum != 0) {
-        return err;
-    }
-    dirent_vec_push(&dv, d);
-
-    err = flush_dv(fd, l, &parent, dv);
-    if (err.errnum != 0) {
-        return err;
-    }
-    // update the parent reference
-    inode_vec_set(&l->nodes, parent, pnode);
     return fs_no_err();
 }
 
@@ -375,6 +339,108 @@ resolve_res resolve_parent(int fd, char *path, layout *l, fs_error *err) {
     return res;
 }
 
+fs_error bdsm_lsobj(char *fs_file, char *obj_path) {
+    int fd = open(fs_file, O_RDWR);
+    if (fd == -1) {
+        return fs_err_create("failed to open VFS file", wrap_errno(errno));
+    }
+
+    fs_error err = fs_no_err();
+    layout l = parse_layout(fd, &err);
+    if (err.errnum != 0) {
+        return err;
+    }
+
+    err = fs_no_err();
+    resolve_res res = resolve_parent(fd, obj_path, &l, &err);
+    if (err.errnum != 0) {
+        return err;
+    }
+
+    dirent de;
+    de.name[0] = '\0';
+    if (res.last_node != 0) {
+        size_t i;
+        for (i=0; i<res.dv.size; i++) {
+            dirent tmp = dirent_vec_get(res.dv, i);
+            if (strcmp(tmp.name, res.last_segment) == 0) {
+                de = tmp;
+                break;
+            }
+        }
+    } else {
+        de.name[0] = '+';
+        de.name[1] = '\0';
+        de.inode_nr = 0;
+    }
+    
+    if (strlen(de.name) == 0) {
+        return fs_err_create("file not found", wrap_errno(0));
+    }
+
+    print_inode(inode_vec_get(l.nodes, res.last_node), de);
+
+    int c_ret = close(fd);
+    if (c_ret == -1) {
+        return fs_err_create("close VFS file err", wrap_errno(errno));
+    }
+    return fs_no_err();
+}
+
+fs_error flush_dv(int fd, layout *l, inode *parent, dirent_vec dv) {
+    parent->size = 0;
+    inode_descriptor pdesc = idesc_create(*l, parent, &l->zones_mb, fd);
+
+    uint16_t batch_size = l->sb.block_size / sizeof(dirent);
+    dirent_vec batch = dirent_vec_init(batch_size);
+    size_t i;
+    for (i=0; i<dv.size; i++) {
+        dirent_vec_push(&batch, dirent_vec_get(dv, i));
+        // on batch size or last element
+        if (batch.size == batch_size || i == dv.size - 1) {
+            uint8_t *buf = (uint8_t*)malloc(l->sb.block_size);
+            uint16_t offset = 0;
+            size_t j;
+            for (j=0; j<batch.size; j++) {
+                dirent_bytes db = dirent_encode(dirent_vec_get(batch, j));
+                memcpy(buf+offset, db.data, sizeof(dirent));
+                offset+=sizeof(dirent);
+            }
+            ssize_t wres = inode_desc_write_block(&pdesc, buf);
+            if (wres < l->sb.block_size) {
+                return fs_err_create("invalid block write", wrap_errno(errno));
+            }
+            parent->size += (uint64_t)wres;
+            free(batch.entries);
+            batch = dirent_vec_init(batch_size);
+        }
+    }
+
+    return fs_no_err();
+}
+
+fs_error add_dirent(int fd, layout *l, uint32_t pnode, dirent d) {
+    inode parent = inode_vec_get(l->nodes, pnode);
+    if (inode_get_n_type(parent.mode) != M_DIR) {
+        return fs_err_create("could not add dirent: parent should be a directory", wrap_errno(0));
+    }
+
+    dirent_vec dv = dirent_vec_init(100);
+    fs_error err = load_dirent_vec(fd, l, pnode, &dv);
+    if (err.errnum != 0) {
+        return err;
+    }
+    dirent_vec_push(&dv, d);
+
+    err = flush_dv(fd, l, &parent, dv);
+    if (err.errnum != 0) {
+        return err;
+    }
+    // update the parent reference
+    inode_vec_set(&l->nodes, parent, pnode);
+    return fs_no_err();
+}
+
 fs_error bdsm_lsdir(char *fs_file, char *dir_path) {
     int fd = open(fs_file, O_RDWR);
     if (fd == -1) {
@@ -393,6 +459,11 @@ fs_error bdsm_lsdir(char *fs_file, char *dir_path) {
         return err;
     }
 
+    inode node = inode_vec_get(l.nodes, res.last_node);
+    if (inode_get_n_type(node.mode) != M_DIR) {
+        return fs_err_create("could not list: not a directory", wrap_errno(0));
+    }
+
     dirent_vec dv = dirent_vec_init(100);
     err = load_dirent_vec(fd, &l, res.last_node, &dv);
     if (err.errnum != 0) {
@@ -402,32 +473,64 @@ fs_error bdsm_lsdir(char *fs_file, char *dir_path) {
     size_t i;
     for (i=0; i<dv.size; i++) {
         dirent de = dirent_vec_get(dv, i);
-        inode item = inode_vec_get(l.nodes, de.inode_nr);
-        char mstr[10];
-        inode_mode_str(item.mode, mstr);
-
-        time_t t = 0;
-        memcpy(&t, &item.mtime, sizeof(time_t));
-        char *t_str = asctime(gmtime(&t));
-        if (t_str[strlen(t_str)-1] == '\n') {
-            // asctime might put newline at the end
-            t_str[strlen(t_str)-1] = '\0';
-        }
-
-        printf("%s %d %d %d %ld %s %s\n",
-            mstr,
-            item.nr_links,
-            item.oid,
-            item.gid,
-            item.size,
-            t_str,
-            de.name);
+        print_inode(inode_vec_get(l.nodes, de.inode_nr), de);
     }
 
+    int c_ret = close(fd);
+    if (c_ret == -1) {
+        return fs_err_create("failed to close VFS file", wrap_errno(errno));
+    }
     return fs_no_err();
 }
 
 fs_error bdsm_stat(char *fs_file, char *obj_path) {
+    int fd = open(fs_file, O_RDWR);
+    if (fd == -1) {
+        return fs_err_create("failed to open VFS file", wrap_errno(errno));
+    }
+
+    fs_error err = fs_no_err();
+    layout l = parse_layout(fd, &err);
+    if (err.errnum != 0) {
+        return err;
+    }
+
+    err = fs_no_err();
+    resolve_res res = resolve_parent(fd, obj_path, &l, &err);
+    if (err.errnum != 0) {
+        return err;
+    }
+
+    inode n = inode_vec_get(l.nodes, res.last_node);
+    char mstr[11];
+    inode_mode_str(n.mode, mstr);
+
+    time_t t = 0;
+    memcpy(&t, &n.mtime, sizeof(time_t));
+    char *t_str = asctime(gmtime(&t));
+    if (t_str[strlen(t_str)-1] == '\n') {
+        // asctime might put newline at the end
+        t_str[strlen(t_str)-1] = '\0';
+    }
+
+    printf("%s %d %d %d %ld %s\n",
+        mstr,
+        n.nr_links,
+        n.oid,
+        n.gid,
+        n.size,
+        t_str);
+    printf("\tzones -> [");
+    size_t i;
+    for (i=0; i<ZONES_SIZE-1; i++) {
+        printf("%d,", n.zones[i]);
+    }
+    printf("%d]\n", n.zones[ZONES_SIZE-1]);
+
+    int c_ret = close(fd);
+    if (c_ret == -1) {
+        return fs_err_create("failed to close VFS file", wrap_errno(errno));
+    }
     return fs_no_err();
 }
 
