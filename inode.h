@@ -21,9 +21,6 @@ struct inode_str {
     uint16_t gid;
     uint32_t mtime;
     uint32_t zones[ZONES_SIZE];
-
-    // make up to 64 bytes in size;
-    uint8_t pad[4];
 };
 
 typedef struct inode_str inode;

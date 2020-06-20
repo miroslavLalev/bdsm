@@ -4,7 +4,9 @@
 #include <unistd.h>
 #include <stdio.h>
 #include <errno.h>
+#include <string.h>
 
+#include "assert.h"
 #include "inode.h"
 #include "encutils.h"
 #include "mblock_ops.h"
@@ -96,6 +98,50 @@ uint8_t inode_get_a_perm(uint16_t mode) {
 
 uint8_t inode_get_n_type(uint16_t mode) {
     return (mode & T_BITS) >> 9;
+}
+
+char *inode_perm_str(uint8_t perm) {
+    char *res = (char*)malloc(4*sizeof(char));
+    res[0] = '-';
+    res[1] = '-';
+    res[2] = '-';
+    if ((perm & M_READ) != 0) {
+        res[0] = 'r';
+    }
+    if ((perm & M_WRITE) != 0) {
+        res[1] = 'w';
+    }
+    if ((perm & M_EXEC) != 0) {
+        res[2] = 'x';
+    }
+    return res;
+}
+
+char *inode_type_str(uint8_t type) {
+    if ((type & M_FILE) != 0) {
+        return "-";
+    }
+    if ((type & M_DIR) != 0) {
+        return "d";
+    }
+    if ((type & M_SLNK) != 0) {
+        return "l";
+    }
+    return "?";
+}
+
+char *inode_mode_str(uint16_t mode) {
+    char *t = inode_type_str(inode_get_n_type(mode));
+    char *u = inode_perm_str(inode_get_u_perm(mode));
+    char *g = inode_perm_str(inode_get_g_perm(mode));
+    char *a = inode_perm_str(inode_get_a_perm(mode));
+
+    char *res = (char*)malloc(strlen(t) + strlen(u) + strlen(g) + strlen(a) + 1);
+    strcat(res, t);
+    strcat(res, u);
+    strcat(res, g);
+    strcat(res, a);
+    return res;    
 }
 
 size_t zone_index(inode_descriptor *d) {
@@ -235,4 +281,8 @@ ssize_t inode_desc_reset_zones(inode_descriptor *d) {
     }
 
     return 0;
+}
+
+void __local_asserts_inode() {
+    COMPILE_TIME_ASSERT(sizeof(inode) == 64);
 }

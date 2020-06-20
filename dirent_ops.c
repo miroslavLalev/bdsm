@@ -2,6 +2,7 @@
 #include <string.h>
 #include <stdio.h>
 
+#include "assert.h"
 #include "dirent.h"
 #include "encutils.h"
 
@@ -21,4 +22,8 @@ dirent dirent_decode(dirent_bytes db) {
     char *name_str = dec_str(db.data, &offset, DIRENT_NAME_SIZE);
     memcpy(d.name, name_str, DIRENT_NAME_SIZE);
     return d;
+}
+
+void __local_asserts_dirent() {
+    COMPILE_TIME_ASSERT(sizeof(dirent) == 64);
 }

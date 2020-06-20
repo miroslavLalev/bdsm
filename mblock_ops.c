@@ -2,6 +2,7 @@
 #include <math.h>
 #include <stdio.h>
 
+#include "assert.h"
 #include "mblock.h"
 
 int rightmost_set_bit(uint8_t val) {
@@ -61,4 +62,8 @@ int mblock_vec_take_first(mblock_vec *mv) {
 
 void mblock_vec_unset(mblock_vec *mv, int k) {
     mblock_unset(&mv->blocks[k/MBLOCK_ITEMS], k%MBLOCK_ITEMS);
+}
+
+void __local_asserts_mblock() {
+    COMPILE_TIME_ASSERT(sizeof(mblock) == 1024);
 }

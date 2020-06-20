@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "assert.h"
 #include "sblock.h"
 #include "encutils.h"
 
@@ -30,4 +31,8 @@ sblock sblock_decode(sblock_bytes sbb) {
     s.max_size = dec_u64(sbb.data, &offset);
     s.block_size = dec_u16(sbb.data, &offset);
     return s;
+}
+
+void __local_asserts_sblock() {
+    COMPILE_TIME_ASSERT(sizeof(sblock) < 1024);
 }

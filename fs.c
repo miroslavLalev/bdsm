@@ -402,7 +402,7 @@ fs_error bdsm_lsdir(char *fs_file, char *dir_path) {
     for (i=0; i<dv.size; i++) {
         dirent de = dirent_vec_get(dv, i);
         inode item = inode_vec_get(l.nodes, de.inode_nr);
-        printf("%o -- %d -- %ld -- %s\n", item.mode, item.nr_links, item.size, de.name);
+        printf("%s -- %d -- %ld -- %s\n", inode_mode_str(item.mode), item.nr_links, item.size, de.name);
     }
 
     return fs_no_err();
