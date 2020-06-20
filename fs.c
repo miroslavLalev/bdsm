@@ -403,7 +403,25 @@ fs_error bdsm_lsdir(char *fs_file, char *dir_path) {
     for (i=0; i<dv.size; i++) {
         dirent de = dirent_vec_get(dv, i);
         inode item = inode_vec_get(l.nodes, de.inode_nr);
-        printf("%s -- %d -- %ld -- %s\n", inode_mode_str(item.mode), item.nr_links, item.size, de.name);
+        char mstr[10];
+        inode_mode_str(item.mode, mstr);
+
+        time_t t = 0;
+        memcpy(&t, &item.mtime, sizeof(time_t));
+        char *t_str = asctime(gmtime(&t));
+        if (t_str[strlen(t_str)-1] == '\n') {
+            // asctime might put newline at the end
+            t_str[strlen(t_str)-1] = '\0';
+        }
+
+        printf("%s %d %d %d %ld %s %s\n",
+            mstr,
+            item.nr_links,
+            item.oid,
+            item.gid,
+            item.size,
+            t_str,
+            de.name);
     }
 
     return fs_no_err();

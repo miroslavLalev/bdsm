@@ -100,48 +100,41 @@ uint8_t inode_get_n_type(uint16_t mode) {
     return (mode & T_BITS) >> 9;
 }
 
-char *inode_perm_str(uint8_t perm) {
-    char *res = (char*)malloc(4*sizeof(char));
-    res[0] = '-';
-    res[1] = '-';
-    res[2] = '-';
-    if ((perm & M_READ) != 0) {
+void inode_perm_str(uint8_t perm, char *res) {
+    if ((perm | M_READ) == perm) {
         res[0] = 'r';
+    } else {
+        res[0] = '-';
     }
-    if ((perm & M_WRITE) != 0) {
+    if ((perm | M_WRITE) == perm) {
         res[1] = 'w';
+    } else {
+        res[1] = '-';
     }
-    if ((perm & M_EXEC) != 0) {
+    if ((perm | M_EXEC) == perm) {
         res[2] = 'x';
+    } else {
+        res[2] = '-';
     }
-    return res;
 }
 
-char *inode_type_str(uint8_t type) {
-    if ((type & M_FILE) != 0) {
-        return "-";
+void inode_type_str(uint8_t type, char *res) {
+    if ((type | M_FILE) == type) {
+        res[0] = '-';
+    } else if ((type | M_DIR) == type) {
+        res[0] = 'd';
+    } else if ((type | M_SLNK) == type) {
+        res[0] = 'l';
+    } else {
+        res[0] = '?';
     }
-    if ((type & M_DIR) != 0) {
-        return "d";
-    }
-    if ((type & M_SLNK) != 0) {
-        return "l";
-    }
-    return "?";
 }
 
-char *inode_mode_str(uint16_t mode) {
-    char *t = inode_type_str(inode_get_n_type(mode));
-    char *u = inode_perm_str(inode_get_u_perm(mode));
-    char *g = inode_perm_str(inode_get_g_perm(mode));
-    char *a = inode_perm_str(inode_get_a_perm(mode));
-
-    char *res = (char*)malloc(strlen(t) + strlen(u) + strlen(g) + strlen(a) + 1);
-    strcat(res, t);
-    strcat(res, u);
-    strcat(res, g);
-    strcat(res, a);
-    return res;    
+void inode_mode_str(uint16_t mode, char *res) {
+    inode_type_str(inode_get_n_type(mode), res);
+    inode_perm_str(inode_get_u_perm(mode), res+1);
+    inode_perm_str(inode_get_g_perm(mode), res+4);
+    inode_perm_str(inode_get_a_perm(mode), res+7);
 }
 
 size_t zone_index(inode_descriptor *d) {
