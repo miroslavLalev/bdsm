@@ -55,7 +55,13 @@ int main(int argc, char *argv[]) {
         printf("\tinodes:\n");
         size_t i;
         for (i=0; i<dbg.inodes.size; i++) {
-            printf("\t\tmode=>%d size=>%lu\n", dbg.inodes.nodes[i].mode, dbg.inodes.nodes[i].size);
+            printf("\t\tmode=>%d size=>%lu zones=>[", dbg.inodes.nodes[i].mode, dbg.inodes.nodes[i].size);
+
+            size_t j;
+            for (j=0; j<ZONES_SIZE-1; j++) {
+                printf("%d,", dbg.inodes.nodes[i].zones[j]);
+            }
+            printf("%d]\n", dbg.inodes.nodes[i].zones[ZONES_SIZE-1]);
         }
 
         return 0;

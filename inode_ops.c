@@ -187,3 +187,46 @@ ssize_t inode_desc_write_block(inode_descriptor *d, uint8_t *data) {
     }
     return -1;
 }
+
+ssize_t inode_desc_reset_zones(inode_descriptor *d) {
+    size_t i;
+    for (i=0; i<7; i++) {
+        if (d->n->zones[i] == 0) {
+            continue;
+        }
+        mblock_vec_unset(d->zones_mb, d->n->zones[i]-1);
+        d->n->zones[i] = 0;
+    }
+    for (; i<8; i++) {
+        if (d->n->zones[i] == 0) {
+            continue;
+        }
+
+        uint8_t *buf = (uint8_t*)malloc(d->block_size*sizeof(uint8_t));
+        if (lseek(d->fd, d->data_offset + d->block_size * (d->n->zones[i]-1), SEEK_SET) < 0) {
+            return -1;
+        }
+        ssize_t zones_res = read(d->fd, buf, d->block_size);
+        if (zones_res < d->block_size) {
+            return -1;
+        }
+
+        uint32_t *zones = (uint32_t*)malloc(d->block_size/sizeof(uint32_t));
+        size_t offset = 0;
+        while (offset < d->block_size) {
+            zones[offset/sizeof(uint32_t)] = dec_u32(buf, &offset);
+        }
+
+        size_t j;
+        for (j=0; j<d->block_size/sizeof(uint32_t); j++) {
+            if (zones[j] == 0) {
+                continue;
+            }
+            mblock_vec_unset(d->zones_mb, zones[j]-1);
+        }
+        mblock_vec_unset(d->zones_mb, d->n->zones[i]-1);
+        d->n->zones[i] = 0;
+    }
+
+    return 0;
+}

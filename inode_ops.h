@@ -26,4 +26,6 @@ ssize_t inode_desc_read_block(inode_descriptor *d, uint8_t *data);
 
 ssize_t inode_desc_write_block(inode_descriptor *d, uint8_t *data);
 
+ssize_t inode_desc_reset_zones(inode_descriptor *d);
+
 #endif

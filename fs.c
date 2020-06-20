@@ -484,10 +484,9 @@ fs_error bdsm_rmdir(char *fs_file, char *dir_path) {
         return err;
     }
 
-    size_t d_ind;
     dirent d;
     d.name[0] = '\0';
-    size_t i;
+    size_t i, d_ind;
     for (i=0; i<res.dv.size; i++) {
         dirent tmp = dirent_vec_get(res.dv, i);
         if (strcmp(tmp.name, res.last_segment) == 0) {
@@ -520,9 +519,6 @@ fs_error bdsm_rmdir(char *fs_file, char *dir_path) {
     dummy.inode_nr = 0;
     dummy.name[0] = '\0';
     dirent_vec_push(&res.dv, dummy);
-    for (i=0; i<res.dv.size;i++) {
-        dirent de = dirent_vec_get(res.dv, i);
-    }
 
     inode parent = inode_vec_get(l.nodes, res.pnode);
     err = flush_dv(fd, &l, &parent, res.dv);
@@ -570,12 +566,6 @@ fs_error bdsm_rmdir(char *fs_file, char *dir_path) {
 }
 
 fs_error cpy_fs_vfs(char *fs_file, char *in, char *out) {
-    char **segments = (char**)malloc(100*sizeof(char*));
-    size_t path_size = fs_path_split(out, &segments);
-    if (fs_path_errno != 0) {
-        return fs_err_create("failed to split path", fs_path_errno);
-    }
-
     int fd = open(fs_file, O_RDWR);
     if (fd == -1) {
         return fs_err_create("failed to open VFS file", wrap_errno(errno));
@@ -705,7 +695,7 @@ fs_error cpy_vfs_fs(char *fs_file, char *in, char *out) {
     }
     inode node = inode_vec_get(l.nodes, res.last_node);
     if (inode_get_n_type(node.mode) != M_FILE) {
-        return fs_err_create("could not copy file: not a file", wrap_errno(0));
+        return fs_err_create("could not copy: object not a file", wrap_errno(0));
     }
 
     inode_descriptor idesc = idesc_create(l, &node, &l.zones_mb, fd);
@@ -723,7 +713,7 @@ fs_error cpy_vfs_fs(char *fs_file, char *in, char *out) {
             wres = write(out_fd, buf, l.sb.block_size);
         }
         if (wres <= 0) {
-            return fs_err_create("failed to write in output file", wrap_errno(errno));
+            return fs_err_create("failed to write output file", wrap_errno(errno));
         }
         size -= l.sb.block_size;
     }
@@ -742,5 +732,84 @@ fs_error bdsm_cpfile(char *fs_file, char *path1, char *path2) {
 }
 
 fs_error bdsm_rmfile(char *fs_file, char *file_path) {
+    int fd = open(fs_file, O_RDWR);
+    if (fd == -1) {
+        return fs_err_create("failed to open VFS file", wrap_errno(errno));
+    }
+
+    fs_error err = fs_no_err();
+    layout l = parse_layout(fd, &err);
+    if (err.errnum != 0) {
+        return err;
+    }
+
+    resolve_res res = resolve_parent(fd, file_path, &l, &err);
+    if (err.errnum != 0) {
+        return err;
+    }
+    dirent d;
+    d.name[0] = '\0';
+    size_t i, d_ind;
+    for (i=0; i < res.dv.size; i++) {
+        dirent tmp = dirent_vec_get(res.dv, i);
+        if (strcmp(tmp.name, res.last_segment) == 0) {
+            d = tmp;
+            d_ind = i;
+            break;
+        }
+    }
+    if (strlen(d.name) == 0) {
+        return fs_err_create("could not find file", wrap_errno(0));
+    }
+
+    inode node = inode_vec_get(l.nodes, res.last_node);
+    if (inode_get_n_type(node.mode) != M_FILE) {
+        return fs_err_create("could not remove: object not a file", wrap_errno(0));
+    }
+
+    inode_descriptor ndesc = idesc_create(l, &node, &l.zones_mb, fd);
+    if (inode_desc_reset_zones(&ndesc) < 0) {
+        return fs_err_create("failed to delete zones", wrap_errno(0));
+    }
+    mblock_vec_unset(&l.inode_mb, res.last_node);
+    // node.mode = 0;
+    node.nr_links = 0;
+    node.size = 0;
+    inode_vec_set(&l.nodes, node, res.last_node);
+
+
+    // remove dirent
+    dirent_vec_remove(&res.dv, d_ind);
+    dirent dummy;
+    dummy.inode_nr = 0;
+    dummy.name[0] = '\0';
+    dirent_vec_push(&res.dv, dummy);
+
+    inode parent = inode_vec_get(l.nodes, res.pnode);
+    err = flush_dv(fd, &l, &parent, res.dv);
+    if (err.errnum != 0) {
+        return err;
+    }
+
+    size_t buf_size = layout_size(l.sb);
+    uint8_t *buf = (uint8_t*)malloc(buf_size);
+    layout_encode(&l, buf);
+    layout_drop(&l);
+
+    if (lseek(fd, 0, SEEK_SET) < 0) {
+        return fs_err_create("failed to seek in VFS file", wrap_errno(errno));
+    }
+    ssize_t wr_bytes = write(fd, buf, buf_size);
+    free(buf);
+    if (wr_bytes == -1) {
+        return fs_err_create("failed to persist layout", wrap_errno(errno));
+    }
+    if ((size_t)wr_bytes < buf_size) {
+        return fs_err_create("failed to persist layout: corrupted write", wrap_errno(0));
+    }
+
+    if (close(fd) == -1) {
+        return fs_err_create("failed to close VFS file", wrap_errno(errno));
+    }
     return fs_no_err();
 }
