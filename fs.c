@@ -607,7 +607,6 @@ fs_error cpy_fs_vfs(char *fs_file, char *in, char *out) {
     if (fstat(in_fd, &in_s) < 0) {
         return fs_err_create("failed to stat input file", wrap_errno(errno));
     }
-    // TODO: size check
 
     resolve_res res = resolve_parent(fd, out, &l, &err);
     if (err.errnum != 0) {
@@ -625,9 +624,42 @@ fs_error cpy_fs_vfs(char *fs_file, char *in, char *out) {
     }
 
     if (inode_num == 0) {
+        uint8_t umode = 00;
+        if ((in_s.st_mode | S_IRUSR) == in_s.st_mode) {
+            umode |= M_READ;
+        }
+        if ((in_s.st_mode | S_IWUSR) == in_s.st_mode) {
+            umode |= M_WRITE;
+        }
+        if ((in_s.st_mode | S_IXUSR) == in_s.st_mode) {
+            umode |= M_EXEC;
+        }
+
+        uint8_t gmode = 00;
+        if ((in_s.st_mode | S_IRGRP) == in_s.st_mode) {
+            gmode |= M_READ;
+        }
+        if ((in_s.st_mode | S_IWGRP) == in_s.st_mode) {
+            gmode |= M_WRITE;
+        }
+        if ((in_s.st_mode | S_IXGRP) == in_s.st_mode) {
+            gmode |= M_EXEC;
+        }
+
+        uint8_t amode = 00;
+        if ((in_s.st_mode | S_IROTH) == in_s.st_mode) {
+            amode |= M_READ;
+        }
+        if ((in_s.st_mode | S_IWOTH) == in_s.st_mode) {
+            amode |= M_WRITE;
+        }
+        if ((in_s.st_mode | S_IXOTH) == in_s.st_mode) {
+            amode |= M_EXEC;
+        }
+
         inode n;
         n.mode = 0;
-        inode_set_mode(&n, M_READ|M_WRITE|M_EXEC, M_READ|M_WRITE, M_READ, M_FILE); // TODO: mode from actual file
+        inode_set_mode(&n, umode, gmode, amode, M_FILE);
         n.nr_links = 0;
         n.size = in_s.st_size;
         n.oid = in_s.st_uid & 0xFFFF;
