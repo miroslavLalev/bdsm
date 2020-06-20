@@ -44,16 +44,15 @@ fs_error bdsm_mkfs(char *fs_file) {
         return fs_err_create("could not get VFS file metadata", wrap_errno(errno));
     }
     // make the max size divisible by 512
-    uint64_t fs_size = (s.st_size / 512) * 512; 
+    uint64_t fs_size = (s.st_size / 512) * 512;
 
     sblock sb;
-    // TODO: pick fields according to the size of the given file
     sb.fs_num = FS_NUM;
-    sb.n_inodes = 10000;
-    sb.imap_blocks = 10; // 81920 total inodes
-    sb.zmap_blocks = 10000; //  78 GB total size of data blocks
-    sb.max_size = fs_size;
     sb.block_size = 1024;
+    sb.zmap_blocks = (fs_size - 10 * 1024 * 1024)/ (MBLOCK_ITEMS * 1024);
+    sb.n_inodes = 10 * 1024 * 1024 * sizeof(inode) / MBLOCK_ITEMS;
+    sb.imap_blocks = sb.n_inodes / MBLOCK_ITEMS;
+    sb.max_size = fs_size;
 
     layout l = layout_init(sb);
     size_t buf_size = layout_size(sb);
@@ -161,6 +160,8 @@ fs_error bdsm_debug(char *fs_file, fs_debug *res) {
     res->block_size = l.sb.block_size;
     res->max_size = l.sb.max_size;
     res->n_inodes = l.sb.n_inodes;
+    res->mbi = l.sb.imap_blocks;
+    res->mbz = l.sb.zmap_blocks;
 
     res->inodes = inode_vec_init(l.nodes.capacity);
     size_t i;

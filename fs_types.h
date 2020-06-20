@@ -11,6 +11,9 @@ struct fs_debug_str {
     uint64_t max_size;
     uint16_t block_size;
 
+    uint32_t mbi;
+    uint32_t mbz;
+
     inode_vec inodes;
 };
 

@@ -12,8 +12,8 @@ sblock_bytes sblock_encode(sblock s) {
     size_t offset = 0;
     enc_u16(s.fs_num, sbb.data, &offset);
     enc_u32(s.n_inodes, sbb.data, &offset);
-    enc_u16(s.imap_blocks, sbb.data, &offset);
-    enc_u16(s.zmap_blocks, sbb.data, &offset);
+    enc_u32(s.imap_blocks, sbb.data, &offset);
+    enc_u32(s.zmap_blocks, sbb.data, &offset);
     enc_u64(s.first_data_zone, sbb.data, &offset);
     enc_u64(s.max_size, sbb.data, &offset);
     enc_u16(s.block_size, sbb.data, &offset);
@@ -25,8 +25,8 @@ sblock sblock_decode(sblock_bytes sbb) {
     size_t offset = 0;
     s.fs_num = dec_u16(sbb.data, &offset);
     s.n_inodes = dec_u32(sbb.data, &offset);
-    s.imap_blocks = dec_u16(sbb.data, &offset);
-    s.zmap_blocks = dec_u16(sbb.data, &offset);
+    s.imap_blocks = dec_u32(sbb.data, &offset);
+    s.zmap_blocks = dec_u32(sbb.data, &offset);
     s.first_data_zone = dec_u64(sbb.data, &offset);
     s.max_size = dec_u64(sbb.data, &offset);
     s.block_size = dec_u16(sbb.data, &offset);

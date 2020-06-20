@@ -8,8 +8,8 @@
 struct sblock_str {
     uint16_t fs_num;
     uint32_t n_inodes;
-    uint16_t imap_blocks;
-    uint16_t zmap_blocks;
+    uint32_t imap_blocks;
+    uint32_t zmap_blocks;
     uint64_t first_data_zone;
     uint64_t max_size;
     uint16_t block_size;
