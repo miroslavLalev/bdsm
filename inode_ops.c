@@ -156,6 +156,12 @@ size_t zone_index(inode_descriptor *d) {
         return 8;
     }
     n_dzone -= c_ind_ind;
+
+    c_ind_ind = (d->block_size/sizeof(uint32_t)) * (d->block_size/sizeof(uint32_t));
+    if (n_dzone < c_ind_ind) {
+        return 9;
+    }
+    n_dzone -= c_ind_ind;
     
     return -1;
 }
@@ -250,7 +256,7 @@ ssize_t inode_desc_read_block(inode_descriptor *d, uint8_t *data) {
             return -1;
         }
 
-        uint32_t n = ((d->offset/d->block_size)-7-d->block_size/sizeof(uint32_t));
+        uint32_t n = ((d->offset/d->block_size)-7-(d->block_size/sizeof(uint32_t)*(zi%7)));
         uint32_t r = n/(d->block_size/sizeof(uint32_t));
         if (zones[r] == 0) {
             return 0;
@@ -349,7 +355,7 @@ ssize_t inode_desc_write_block(inode_descriptor *d, uint8_t *data) {
             return -1;
         }
 
-        uint32_t n = ((d->offset/d->block_size)-7-d->block_size/sizeof(uint32_t));
+        uint32_t n = ((d->offset/d->block_size)-7-(d->block_size/sizeof(uint32_t)*(zi%7)));
 
         int new_ref_zone = 1;
         uint32_t r = n/(d->block_size/sizeof(uint32_t));
