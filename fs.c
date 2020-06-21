@@ -48,6 +48,27 @@ fs_error bdsm_mkfs(char *fs_file) {
     // make the max size divisible by 512
     uint64_t fs_size = (s.st_size / 512) * 512;
 
+    off_t full_size = 0;
+    int batch_size = 4 * 1024;
+    uint8_t *buf = (uint8_t*)malloc(batch_size);
+    while (full_size < s.st_size) {
+        memset(buf, 0, batch_size);
+
+        int wsize = batch_size;
+        if (s.st_size - full_size < batch_size) {
+            wsize = s.st_size - full_size;
+        }
+
+        if (write(fd, buf, wsize) <= 0) {
+            return fs_err_create("could not init fs: failed to empty file", wrap_errno(errno));
+        }
+        full_size+=batch_size;
+    }
+    if (lseek(fd, 0, SEEK_SET) < 0) {
+        return fs_err_create("failed to return fd", wrap_errno(errno));
+    }
+
+
     sblock sb;
     sb.fs_num = FS_NUM;
     sb.block_size = 1024;
@@ -58,7 +79,7 @@ fs_error bdsm_mkfs(char *fs_file) {
 
     layout l = layout_init(sb);
     size_t buf_size = layout_size(sb);
-    uint8_t *buf = (uint8_t*)malloc(buf_size);
+    buf = (uint8_t*)malloc(buf_size);
     layout_encode(&l, buf);
     layout_drop(&l);
 
