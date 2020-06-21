@@ -315,7 +315,7 @@ ssize_t inode_desc_write_block(inode_descriptor *d, uint8_t *data) {
         uint32_t *zones = (uint32_t*)malloc(d->block_size);
         if (deref_zone(d, d->n->zones[zi]-1, zones) < 0) {
             return -1;
-        } 
+        }
 
         int new_zone = 1;
         uint16_t r = ((d->offset/d->block_size)-7);
@@ -419,6 +419,14 @@ ssize_t inode_desc_reset_zones(inode_descriptor *d) {
         if (d->n->zones[i] == 0) {
             continue;
         }
+
+        uint32_t *zones = (uint32_t*)malloc(d->block_size);
+        memset(zones, 0, d->block_size);
+        if (persist_zone(d, d->n->zones[i]-1, zones) < 0) {
+            return -1;
+        }
+        free(zones);
+
         mblock_vec_unset(d->zones_mb, d->n->zones[i]-1);
         d->n->zones[i] = 0;
     }
@@ -437,12 +445,25 @@ ssize_t inode_desc_reset_zones(inode_descriptor *d) {
             if (zones[j] == 0) {
                 continue;
             }
+
+            uint32_t *rzones = (uint32_t*)malloc(d->block_size);
+            memset(rzones, 0, d->block_size);
+            if (persist_zone(d, zones[j]-1, rzones) < 0) {
+                return -1;
+            }
+            free(rzones);
+
             mblock_vec_unset(d->zones_mb, zones[j]-1);
         }
+
+        memset(zones, 0, d->block_size);
+        if (persist_zone(d, d->n->zones[i]-1, zones) < 0) {
+            return -1;
+        }
+        free(zones);
+
         mblock_vec_unset(d->zones_mb, d->n->zones[i]-1);
         d->n->zones[i] = 0;
-
-        free(zones);
     }
     for (; i<10; i++) {
         if (d->n->zones[i] == 0) {
@@ -459,7 +480,7 @@ ssize_t inode_desc_reset_zones(inode_descriptor *d) {
             if (zones[j] == 0) {
                 continue;
             }
-            
+
             uint32_t *zones_zones = (uint32_t*)malloc(d->block_size);
             if (deref_zone(d, zones[j]-1, zones_zones) < 0) {
                 return -1;
@@ -470,15 +491,36 @@ ssize_t inode_desc_reset_zones(inode_descriptor *d) {
                 if (zones_zones[k] == 0) {
                     continue;
                 }
+
+                uint32_t *rzones = (uint32_t*)malloc(d->block_size);
+                memset(rzones, 0, d->block_size);
+                if (persist_zone(d, zones_zones[k]-1, rzones) < 0) {
+                    return -1;
+                }
+                free(rzones);
+
                 mblock_vec_unset(d->zones_mb, zones_zones[k]-1);
             }
+
+            uint32_t *rzones = (uint32_t*)malloc(d->block_size);
+            memset(rzones, 0, d->block_size);
+            if (persist_zone(d, zones[j]-1, rzones) < 0) {
+                return -1;
+            }
+            free(rzones);
 
             mblock_vec_unset(d->zones_mb, zones[j]-1);
             free(zones_zones);
         }
+
+        memset(zones, 0, d->block_size);
+        if (persist_zone(d, d->n->zones[i]-1, zones) < 0) {
+            return -1;
+        }
+        free(zones);
+
         mblock_vec_unset(d->zones_mb, d->n->zones[i]-1);
         d->n->zones[i] = 0;
-        free(zones);
     }
 
     return 0;

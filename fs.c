@@ -689,18 +689,16 @@ fs_error bdsm_rmdir(char *fs_file, char *dir_path) {
         return err;
     }
 
+    inode_descriptor desc = idesc_create(l, &node, &l.zones_mb, fd);
+    if (inode_desc_reset_zones(&desc) < 0) {
+        return fs_err_create("could not delete zones", wrap_errno(errno));
+    }
+
     // remove inode
     node.mode = 0;
     node.nr_links = 0;
     node.size = 0;
-    for (i=0; i<ZONES_SIZE; i++) {
-        if (node.zones[i] != 0) {
-            mblock_vec_unset(&l.zones_mb, node.zones[i]-1);
-        }
-        // we don't have to touch the contents of the zones,
-        // they will be overwritten
-        node.zones[i] = 0;
-    }
+
     inode_vec_set(&l.nodes, node, d.inode_nr);
     mblock_vec_unset(&l.inode_mb, d.inode_nr);
 
@@ -975,9 +973,12 @@ fs_error bdsm_rmfile(char *fs_file, char *file_path) {
         return fs_err_create("failed to delete zones", wrap_errno(0));
     }
     mblock_vec_unset(&l.inode_mb, res.last_node);
-    // node.mode = 0;
+    node.mode = 0;
     node.nr_links = 0;
     node.size = 0;
+    node.oid = 0;
+    node.gid = 0;
+    node.mtime = 0;
     inode_vec_set(&l.nodes, node, res.last_node);
 
 
