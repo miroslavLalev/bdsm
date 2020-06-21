@@ -469,6 +469,14 @@ fs_error add_dirent(int fd, layout *l, uint32_t pnode, dirent d) {
     if (err.errnum != 0) {
         return err;
     }
+    size_t i;
+    for (i=0; i<dv.size; i++) {
+        dirent de = dirent_vec_get(dv, i);
+        if (strcmp(de.name, d.name) == 0) {
+            // dirent already exists, nothing to do
+            return fs_no_err();
+        }
+    }
     dirent_vec_push(&dv, d);
 
     err = flush_dv(fd, l, &parent, dv);
