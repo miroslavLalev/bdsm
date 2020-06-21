@@ -1,5 +1,6 @@
 #include <stdlib.h>
 #include <stdint.h>
+#include <string.h>
 
 void enc_u16(uint16_t val, uint8_t *data, size_t *offset) {
     size_t ov = *offset;
@@ -69,12 +70,10 @@ void enc_str(char *str, size_t size, uint8_t *data, size_t *offset) {
     *offset+=size;
 }
 
-char *dec_str(uint8_t *data, size_t *offset, size_t size) {
-    char *res = (char*)malloc(size*sizeof(char));
+void dec_str(uint8_t *data, size_t *offset, char *res, size_t size) {
     size_t i;
     for (i=0; i<size; i++) {
         res[i] = data[*offset+i];
     }
     *offset+=size;
-    return res;
 }

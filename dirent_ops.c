@@ -19,8 +19,8 @@ dirent dirent_decode(dirent_bytes db) {
     size_t offset = 0;
     d.inode_nr = dec_u32(db.data, &offset);
 
-    char *name_str = dec_str(db.data, &offset, DIRENT_NAME_SIZE);
-    memcpy(d.name, name_str, DIRENT_NAME_SIZE);
+    memset(d.name, 0, DIRENT_NAME_SIZE);
+    dec_str(db.data, &offset, d.name, DIRENT_NAME_SIZE);
     return d;
 }
 

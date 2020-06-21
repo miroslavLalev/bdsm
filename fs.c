@@ -226,6 +226,7 @@ fs_error load_dirent_vec(int fd, layout *l, size_t inode_num, dirent_vec *dv) {
     
     inode_descriptor idesc = idesc_create(*l, &node, &l->zones_mb, fd);
     uint8_t *buf = (uint8_t*)malloc(l->sb.block_size*sizeof(uint8_t));
+    memset(buf, 0, l->sb.block_size*sizeof(uint8_t));
     ssize_t rres;
     while ((rres = inode_desc_read_block(&idesc, buf)) != 0) {
         if (rres < 0) {
@@ -235,6 +236,7 @@ fs_error load_dirent_vec(int fd, layout *l, size_t inode_num, dirent_vec *dv) {
         size_t s_buf;
         for (s_buf=0; s_buf<(size_t)rres; s_buf+=sizeof(dirent)) {
             dirent_bytes db;
+            memset(db.data, 0, sizeof(dirent));
             memcpy(db.data, buf, sizeof(dirent));
             dirent de = dirent_decode(db);
             if (strcmp(de.name, "") == 0) {
@@ -248,7 +250,6 @@ fs_error load_dirent_vec(int fd, layout *l, size_t inode_num, dirent_vec *dv) {
         if (is_end) {
             break;
         }
-
         buf = (uint8_t*)malloc(l->sb.block_size*sizeof(uint8_t));
     }
     return fs_no_err();
@@ -415,6 +416,7 @@ fs_error flush_dv(int fd, layout *l, inode *parent, dirent_vec dv) {
         // on batch size or last element
         if (batch.size == batch_size || i == dv.size - 1) {
             uint8_t *buf = (uint8_t*)malloc(l->sb.block_size);
+            memset(buf, 0, l->sb.block_size);
             uint16_t offset = 0;
             size_t j;
             for (j=0; j<batch.size; j++) {
@@ -839,6 +841,7 @@ fs_error cpy_fs_vfs(char *fs_file, char *in, char *out) {
 
     dirent d;
     d.inode_nr = inode_num;
+    memset(d.name, 0, DIRENT_NAME_SIZE);
     strncpy(d.name, res.last_segment, DIRENT_NAME_SIZE);
     err = add_dirent(fd, &l, res.pnode, d);
     if (err.errnum != 0) {

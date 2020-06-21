@@ -10,6 +10,7 @@ dirent_vec dirent_vec_init(size_t cap) {
     dirent_vec dv;
     dv.size = 0;
     dv.entries = (dirent*)malloc(cap * sizeof(dirent));
+    memset(dv.entries, 0, cap * sizeof(dirent));
     dv.capacity = cap;
     return dv;
 }
@@ -28,6 +29,7 @@ dirent dirent_vec_remove(dirent_vec *v, size_t i) {
     dirent d = v->entries[i];
     v->size--;
     dirent *new_nodes = (dirent*)malloc((v->capacity)*sizeof(dirent));
+    memset(new_nodes, 0, (v->capacity)*sizeof(dirent));
     if (v->size == 0) {
         free(v->entries);
         v->entries = new_nodes;
