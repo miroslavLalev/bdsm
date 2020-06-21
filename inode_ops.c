@@ -438,11 +438,11 @@ ssize_t inode_desc_reset_zones(inode_descriptor *d) {
 
         free(zones);
     }
-    for (; i<9; i++) {
+    for (; i<10; i++) {
         if (d->n->zones[i] == 0) {
             continue;
         }
-        
+
         uint32_t *zones = (uint32_t*)malloc(d->block_size);
         if (deref_zone(d, d->n->zones[i]-1, zones) < 0) {
             return -1;

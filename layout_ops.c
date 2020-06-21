@@ -3,6 +3,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <assert.h>
+#include <time.h>
 
 #include "layout.h"
 #include "mblock.h"
@@ -35,6 +36,10 @@ layout layout_init(sblock sb) {
     iroot.oid = 0;
     iroot.gid = 0;
     iroot.mtime = 0;
+
+    time_t now = time(NULL);
+    memcpy(&iroot.mtime, &now, sizeof(iroot.mtime));
+
     memset(iroot.zones, 0, ZONES_SIZE * sizeof(uint32_t));
     int inr = mblock_vec_take_first(&l.inode_mb);
     assert(inr == 0); // root inode should be the first one
