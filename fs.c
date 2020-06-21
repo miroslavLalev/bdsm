@@ -847,6 +847,10 @@ fs_error cpy_fs_vfs(char *fs_file, char *in, char *out) {
     }
 
     inode n = inode_vec_get(l.nodes, inode_num);
+    if (inode_get_n_type(n.mode) != M_FILE) {
+        return fs_err_create("failed to copy: object not a file", wrap_errno(0));
+    }
+
     n.size = in_s.st_size;
     inode_descriptor ndesc = idesc_create(l, &n, &l.zones_mb, fd);
 
